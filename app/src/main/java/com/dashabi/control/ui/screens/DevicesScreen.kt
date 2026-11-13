@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,12 +47,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -123,7 +119,7 @@ fun DevicesScreen(
             DashaTopBar(
                 title = "设备总览",
                 subtitle = if (hasKey) {
-                    "更新于 ${clockOf(vm.lastUpdated)} · 每 30 秒自动刷新"
+                    "更新于 ${clockOf(vm.lastUpdated)} · 每 60 秒自动刷新"
                 } else {
                     "未配置 API Key"
                 },
@@ -154,8 +150,8 @@ fun DevicesScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (!hasKey) {
                 item(key = "missing-key") {
@@ -167,13 +163,9 @@ fun DevicesScreen(
             } else {
                 item(key = "hero") { SummaryHero(vm.summary, assistantWarnings.size) }
                 item(key = "assistant-update") {
-                    Row(
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        androidx.compose.material3.OutlinedButton(
-                            enabled = !updatingAssistants,
-                            onClick = {
+                    com.dashabi.control.ui.components.AssistantUpdatePanel(
+                        busy = updatingAssistants, status = updateMessage,
+                        onUpdate = {
                                 val targets = vm.devices
                                     .filter { it.status?.code == "waiting_next_round" }
                                     .mapNotNull { d ->
@@ -186,48 +178,30 @@ fun DevicesScreen(
                                     updatingAssistants = true
                                     updateMessage = "正在通知 ${targets.size} 台助手更新…"
                                     scope.launch {
-                                        var ok = 0
-                                        targets.forEach { (_, assistant) ->
-                                            if (container.cloudSync.sendUpdate(assistant)) ok++
+                                        try {
+                                            var ok = 0
+                                            targets.forEach { (_, assistant) ->
+                                                if (container.cloudSync.sendUpdate(assistant)) ok++
+                                            }
+                                            updateMessage = "已通知 $ok/${targets.size} 台助手更新"
+                                        } catch (e: Exception) {
+                                            updateMessage = "通知失败，请稍后重试"
+                                        } finally {
+                                            updatingAssistants = false
                                         }
-                                        updatingAssistants = false
-                                        updateMessage = "已通知 $ok/${targets.size} 台助手更新"
                                     }
                                 }
-                            }
-                        ) {
-                            androidx.compose.material3.Text(
-                                if (updatingAssistants) "正在更新…" else "一键更新助手版本"
-                            )
                         }
-                        updateMessage?.let {
-                            Text(
-                                it,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextMuted
-                            )
-                        }
-                        Spacer(Modifier.weight(1f))
-                        IconButton(
-                            onClick = { compact = !compact },
-                            modifier = Modifier.padding(horizontal = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (compact) Icons.Outlined.ViewAgenda else Icons.Outlined.GridView,
-                                contentDescription = if (compact) "切换为标准模式" else "切换为缩略模式",
-                                tint = if (compact) Amber else TextSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                    )
                 }
                 item(key = "section") {
                     SectionTitle("设备列表") {
-                        Text(
-                            "${vm.devices.size} 台",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = TextMuted
-                        )
+                        Text("${vm.devices.size} 台", style = MaterialTheme.typography.labelMedium, color = TextMuted)
+                        IconButton(onClick = { compact = !compact }) {
+                            Icon(if (compact) Icons.Outlined.ViewAgenda else Icons.Outlined.GridView,
+                                contentDescription = if (compact) "切换为标准模式" else "切换为缩略模式",
+                                tint = if (compact) Amber else TextSecondary, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
                 vm.error?.let { message ->
@@ -281,137 +255,53 @@ fun DevicesScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SummaryHero(summary: Summary?, assistantOffline: Int) {
-    val shape = RoundedCornerShape(18.dp)
-    val surface = Surface1
-    val heroStart = HeroStart
-    val accent = Amber
-    val border = Line
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .drawBehind {
-                drawRoundRect(
-                    brush = Brush.linearGradient(
-                        listOf(heroStart, surface)
-                    )
-                )
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(accent.copy(alpha = 0.18f), Color.Transparent),
-                        center = Offset(size.width * 0.94f, size.height * 0.02f),
-                        radius = size.width * 0.55f
-                    ),
-                    radius = size.width * 0.55f,
-                    center = Offset(size.width * 0.94f, size.height * 0.02f)
-                )
-                drawRoundRect(
-                    color = border,
-                    size = size,
-                    cornerRadius = CornerRadius(18.dp.toPx()),
-                    style = Stroke(width = 1.dp.toPx())
-                )
-            }
-            .padding(16.dp)
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(Amber)
-                )
-                Spacer(Modifier.width(7.dp))
-                Text(
-                    "运行总览",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Amber
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "status/summary",
-                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                    color = TextMuted
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StatBlock(
-                    value = summary?.devices?.toString() ?: "—",
-                    label = "设备",
-                    modifier = Modifier.weight(1f)
-                )
-                MiniDivider()
-                StatBlock(
-                    value = summary?.accounts?.toString() ?: "—",
-                    label = "账号",
-                    modifier = Modifier.weight(1f)
-                )
-                MiniDivider()
-                StatBlock(
-                    value = summary?.running?.toString() ?: "—",
-                    label = "运行中",
-                    modifier = Modifier.weight(1f),
-                    valueColor = Mint
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SummaryChip("等待下一轮", summary?.waitingNextRound ?: 0, Sky)
-                SummaryChip("已停止", summary?.stopped ?: 0, Rose)
-                SummaryChip("助手无障碍断开", assistantOffline, Rose)
-                SummaryChip("未知", summary?.unknown ?: 0, TextMuted)
-            }
+internal fun SummaryHero(summary: Summary?, assistantOffline: Int) {
+    DashaCard(containerColor = HeroStart, contentPadding = PaddingValues(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("运行总览", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
+            Spacer(Modifier.weight(1f))
+            Text("60 秒自动刷新", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OverviewMetric(summary?.devices?.toString() ?: "—", "设备总数", TextPrimary, Modifier.weight(1.1f))
+            OverviewMetric(summary?.accounts?.toString() ?: "—", "托管账号", TextPrimary, Modifier.weight(1f))
+            OverviewMetric(summary?.running?.toString() ?: "—", "运行中", Mint, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(10.dp))
+        HorizontalDivider(color = Line.copy(alpha = 0.55f))
+        Spacer(Modifier.height(8.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            OverviewStatus("等待下一轮", summary?.waitingNextRound, Sky)
+            OverviewStatus("已停止", summary?.stopped, Rose)
+            OverviewStatus("助手无障碍断开", assistantOffline, Rose)
+            if (summary?.unknown == null || summary.unknown > 0) OverviewStatus("未知", summary?.unknown, TextMuted)
         }
     }
 }
 
 @Composable
-private fun MiniDivider() {
-    Box(Modifier.width(1.dp).height(28.dp).background(Line))
-}
-
-@Composable
-private fun SummaryChip(label: String, count: Int, color: Color) {
-    val active = count > 0
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = if (active) 0.12f else 0.05f))
-            .padding(horizontal = 9.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier
-                .size(5.dp)
-                .clip(CircleShape)
-                .background(if (active) color else TextMuted.copy(alpha = 0.45f))
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (active) TextSecondary else TextMuted
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            "$count",
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            ),
-            color = if (active) color else TextMuted
-        )
+private fun OverviewMetric(value: String, label: String, color: Color, modifier: Modifier) {
+    Column(modifier) {
+        Text(value, style = MaterialTheme.typography.headlineSmall,
+            color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(2.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
     }
 }
 
 @Composable
-private fun DeviceCard(
+private fun OverviewStatus(label: String, count: Int?, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(5.dp).clip(CircleShape).background(if (count != null && count > 0) color else TextMuted.copy(alpha = 0.5f)))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+        Text(count?.toString() ?: "—", style = MaterialTheme.typography.labelMedium, color = if (count != null && count > 0) color else TextMuted)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun DeviceCard(
     device: Device,
     assistantVersion: String? = null,
     assistantLatest: String? = null,
@@ -425,7 +315,7 @@ private fun DeviceCard(
     val running = device.status?.running == true
     val ver = assistantVersion?.takeIf { it.isNotBlank() }
     val outdated = ver != null && !assistantLatest.isNullOrBlank() && ver != assistantLatest
-    DashaCard(modifier = modifier, accent = if (assistantWarning != null || abnormalReasons.isNotEmpty()) Rose else style.color, onClick = onClick, contentPadding = if (compact) PaddingValues(10.dp) else PaddingValues(16.dp)) {
+    DashaCard(modifier = modifier, accent = if (assistantWarning != null || abnormalReasons.isNotEmpty()) Rose else style.color, onClick = onClick, contentPadding = if (compact) PaddingValues(10.dp) else PaddingValues(12.dp)) {
         if (compact) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(style.color, size = 9.dp, pulsing = running)
@@ -485,7 +375,7 @@ private fun DeviceCard(
             StatusPill(style.label, style.color)
         }
 
-        Spacer(Modifier.height(11.dp))
+        Spacer(Modifier.height(7.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -509,20 +399,11 @@ private fun DeviceCard(
             )
         }
 
-        if (ver != null || assistantLatest != null) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "助手版本 ${ver ?: "未上报"}" +
-                    if (outdated) "（最新 $assistantLatest）" else "",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (outdated) Rose else TextMuted
-            )
-        }
-
-        if (abnormalReasons.isNotEmpty()) {
+        val additionalReasons = abnormalReasons.filterNot { it == style.label }
+        if (additionalReasons.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text(
-                abnormalReasons.joinToString(" · "),
+                additionalReasons.joinToString(" · "),
                 style = MaterialTheme.typography.labelMedium,
                 color = Rose
             )
@@ -555,9 +436,12 @@ private fun DeviceCard(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (ver != null || assistantLatest != null) {
+                InfoChip("助手 ${ver ?: "未上报"}" + if (outdated) " → $assistantLatest" else "", if (outdated) Rose else TextMuted)
+            }
             InfoChip("定时 ${deviceTimerLabel(device.status?.timerEnabled)}")
             if (!device.tag.isNullOrBlank()) InfoChip("标签 ${device.tag}")
             if (device.status?.online != null) {

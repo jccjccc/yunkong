@@ -32,6 +32,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,7 +86,7 @@ fun AbnormalScreen(
     Scaffold(
         topBar = {
             DashaTopBar(
-                title = "异常账号",
+                title = "异常中心",
                 subtitle = "共 ${vm.items.size} 个 · 更新于 ${clockOf(vm.lastUpdated)}",
                 loading = vm.loading,
                 actions = {
@@ -113,9 +115,12 @@ fun AbnormalScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item(key = "summary") {
+                com.dashabi.control.ui.components.AttentionSummary(vm.items.size, deviceAbnormalCount, vm.loading, vm.error != null)
+            }
             if (vm.loading && vm.items.isEmpty()) {
                 item(key = "loading") { LoadingState("正在检查异常账号…") }
             }
@@ -143,7 +148,8 @@ fun AbnormalScreen(
 
 @Composable
 private fun CriteriaCard() {
-    DashaCard(accent = Amber, contentPadding = PaddingValues(12.dp)) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    DashaCard(accent = Amber, contentPadding = PaddingValues(16.dp), onClick = { expanded = !expanded }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 Icons.Outlined.Info,
@@ -154,8 +160,9 @@ private fun CriteriaCard() {
             Spacer(Modifier.width(6.dp))
             Text("异常判定", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
         }
-        Spacer(Modifier.height(4.dp))
-        Text(
+        Spacer(Modifier.height(8.dp))
+        Text(if (expanded) "点击收起判定规则" else "查看账号归类规则与统计范围", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+        if (expanded) Text(
             "云端状态异常 · raw_status 账号冻结 / 需要验证（蓝脸/人脸） · 哈夫币低于 100 万 · 设施进度缺少完成时间或超时 10 分钟以上（仅状态正常的账号）。" +
                 "这里只做归类展示，不影响账号总览的「异常」筛选。",
             style = MaterialTheme.typography.bodySmall,

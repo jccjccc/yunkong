@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Refresh
@@ -68,6 +70,9 @@ import com.dashabi.control.data.DeviceStatus
 import com.dashabi.control.ui.accountStatusStyle
 import com.dashabi.control.ui.components.ConfirmDialog
 import com.dashabi.control.ui.components.DashaCard
+import com.dashabi.control.ui.components.DetailSectionTabs
+import com.dashabi.control.ui.components.PageSectionIntro
+import com.dashabi.control.ui.components.OperationFeedback
 import com.dashabi.control.ui.components.DashaTopBar
 import com.dashabi.control.ui.components.EmptyState
 import com.dashabi.control.ui.components.ErrorState
@@ -157,8 +162,13 @@ fun DeviceDetailScreen(
         vm.messages.collect { snackbar.showSnackbar(it.text) }
     }
 
+    var detailSection by androidx.compose.runtime.saveable.rememberSaveable(deviceCode) { androidx.compose.runtime.mutableStateOf(0) }
+    val detailListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(detailSection) { detailListState.scrollToItem(0) }
+
     Scaffold(
         topBar = {
+            Column {
             DashaTopBar(
                 title = vm.device?.name ?: "设备详情",
                 subtitle = vm.device?.model ?: deviceCode.take(10),
@@ -173,17 +183,20 @@ fun DeviceDetailScreen(
                     }
                 }
             )
+            DetailSectionTabs(listOf("概览", "控制", "助手", "账号"), detailSection) { detailSection = it }
+            }
         },
         bottomBar = {
-            if (vm.selected.isNotEmpty()) {
+            if (detailSection == 3 && vm.selected.isNotEmpty()) {
                 Surface(color = Surface1, shadowElevation = 12.dp) {
-                    Row(
+                    Column(
                         Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(
                                 "已选择 ${vm.selected.size} 个账号",
@@ -199,7 +212,8 @@ fun DeviceDetailScreen(
                         TextButton(onClick = { vm.clearSelection() }) {
                             Text("清空", color = TextSecondary)
                         }
-                        Spacer(Modifier.width(4.dp))
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(
                             onClick = {
                                 val ids = vm.selected.mapNotNull { it.toLongOrNull() }
@@ -228,7 +242,8 @@ fun DeviceDetailScreen(
                                     true
                                 ).show()
                             },
-                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Text("定时出售", style = MaterialTheme.typography.labelLarge)
@@ -240,10 +255,12 @@ fun DeviceDetailScreen(
                                 containerColor = Rose,
                                 contentColor = Color(0xFF1B0505)
                             ),
-                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text("批量出售", style = MaterialTheme.typography.labelLarge)
+                        }
                         }
                     }
                 }
@@ -253,18 +270,30 @@ fun DeviceDetailScreen(
         containerColor = Ink
     ) { padding ->
         LazyColumn(
+            state = detailListState,
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item(key = "status") {
-                DeviceStatusCard(
-                    device = vm.device,
-                    live = vm.liveStatus,
-                    onRefreshLive = { vm.refreshLive() }
-                )
+            if (detailSection == 0) {
+                item(key = "status") {
+                    DeviceStatusCard(
+                        device = vm.device,
+                        live = vm.liveStatus,
+                        onRefreshLive = { vm.refreshLive() }
+                    )
+                }
             }
 
+            if (detailSection == 0) {
+                item(key = "workspace-actions") {
+                    com.dashabi.control.ui.components.DashaCard(contentPadding = PaddingValues(0.dp)) {
+                        com.dashabi.control.ui.components.SettingsMenuRow(Icons.Outlined.PlayArrow, "运行控制", "定时、脚本、亮度与出售任务", { detailSection = 1 })
+                        com.dashabi.control.ui.components.SettingsMenuRow(Icons.Outlined.Sync, "助手管理", "扫码绑定、远程重启与版本更新", { detailSection = 2 })
+                        com.dashabi.control.ui.components.SettingsMenuRow(Icons.Outlined.Person, "设备账号", "查看 ${vm.accounts.size} 个账号与批量操作", { detailSection = 3 })
+                    }
+                }
+            }
             vm.error?.let { message ->
                 item(key = "error") {
                     ErrorState(message, onRetry = { vm.load() })
@@ -281,404 +310,424 @@ fun DeviceDetailScreen(
                 }
             }
 
-            item(key = "control-title") { SectionTitle("设备控制") }
-            item(key = "controls") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ControlButton(
-                            icon = Icons.Outlined.Timer,
-                            title = "开启定时",
-                            subtitle = "timer/enable",
-                            tint = Mint,
-                            enabled = vm.busyAction == null,
-                            modifier = Modifier.weight(1f),
-                            onClick = { vm.toggleTimer(true) }
-                        )
-                        ControlButton(
-                            icon = Icons.Outlined.TimerOff,
-                            title = "关闭定时",
-                            subtitle = "timer/disable",
-                            tint = Amber,
-                            enabled = vm.busyAction == null,
-                            modifier = Modifier.weight(1f),
-                            onClick = { vm.toggleTimer(false) }
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ControlButton(
-                            icon = Icons.Outlined.WbSunny,
-                            title = "最低亮度",
-                            subtitle = "远程调到 1%",
-                            tint = TextSecondary,
-                            enabled = vm.busyAction == null,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                scope.launch {
-                                    val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
-                                    val ok = if (assistant.isBlank()) false else container.cloudSync.sendBrightness(assistant, 1)
-                                    snackbar.showSnackbar(if (ok) "已通知助手调到最低亮度" else "下发失败，先绑定助手")
-                                }
-                            }
-                        )
-                        ControlButton(
-                            icon = Icons.Outlined.WbSunny,
-                            title = "50% 亮度",
-                            subtitle = "远程调到 50%",
-                            tint = Amber,
-                            enabled = vm.busyAction == null,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                scope.launch {
-                                    val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
-                                    val ok = if (assistant.isBlank()) false else container.cloudSync.sendBrightness(assistant, 50)
-                                    snackbar.showSnackbar(if (ok) "已通知助手调到 50% 亮度" else "下发失败，先绑定助手")
-                                }
-                            }
-                        )
-                    }
-                    ControlButton(
-                        icon = Icons.Outlined.Sync,
-                        title = "同步 TIM 账号",
-                        subtitle = "把设备上的 QQ 列表推给助手勾选",
-                        tint = TextSecondary,
-                        enabled = vm.busyAction == null && vm.accounts.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = {
-                            scope.launch {
-                                val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
-                                val all = vm.accounts.map { it.accountCode }
-                                val ok = if (assistant.isBlank() || all.isEmpty()) false
-                                else container.cloudSync.sendTimAccounts(assistant, all)
-                                snackbar.showSnackbar(
-                                    if (ok) "已推送 ${all.size} 个账号，去助手设置里勾选 TIM"
-                                    else "推送失败，先绑定助手"
-                                )
-                            }
+            if (detailSection == 1) {
+                item(key = "control-title") { SectionTitle("设备控制") }
+            }
+            if (detailSection == 1) {
+                item(key = "controls") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ControlButton(
+                                icon = Icons.Outlined.Timer,
+                                title = "开启定时",
+                                subtitle = "timer/enable",
+                                tint = Mint,
+                                enabled = vm.busyAction == null,
+                                modifier = Modifier.weight(1f),
+                                onClick = { vm.toggleTimer(true) }
+                            )
+                            ControlButton(
+                                icon = Icons.Outlined.TimerOff,
+                                title = "关闭定时",
+                                subtitle = "timer/disable",
+                                tint = Amber,
+                                enabled = vm.busyAction == null,
+                                modifier = Modifier.weight(1f),
+                                onClick = { vm.toggleTimer(false) }
+                            )
                         }
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ControlButton(
-                            icon = Icons.Outlined.StopCircle,
-                            title = "停止脚本",
-                            subtitle = "可同时关定时",
-                            tint = Rose,
-                            enabled = vm.busyAction == null,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                disableTimerOnStop = false
-                                showStopDialog = true
-                            }
-                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ControlButton(
+                                icon = Icons.Outlined.WbSunny,
+                                title = "最低亮度",
+                                subtitle = "远程调到 1%",
+                                tint = TextSecondary,
+                                enabled = vm.busyAction == null,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    scope.launch {
+                                        val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
+                                        val ok = if (assistant.isBlank()) false else container.cloudSync.sendBrightness(assistant, 1)
+                                        snackbar.showSnackbar(if (ok) "已通知助手调到最低亮度" else "下发失败，先绑定助手")
+                                    }
+                                }
+                            )
+                            ControlButton(
+                                icon = Icons.Outlined.WbSunny,
+                                title = "50% 亮度",
+                                subtitle = "远程调到 50%",
+                                tint = Amber,
+                                enabled = vm.busyAction == null,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    scope.launch {
+                                        val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
+                                        val ok = if (assistant.isBlank()) false else container.cloudSync.sendBrightness(assistant, 50)
+                                        snackbar.showSnackbar(if (ok) "已通知助手调到 50% 亮度" else "下发失败，先绑定助手")
+                                    }
+                                }
+                            )
+                        }
                         ControlButton(
                             icon = Icons.Outlined.Sync,
-                            title = "同步账号",
-                            subtitle = "sync",
-                            tint = Sky,
-                            enabled = vm.busyAction == null,
-                            modifier = Modifier.weight(1f),
-                            onClick = { vm.sync() }
+                            title = "同步 TIM 账号",
+                            subtitle = "把设备上的 QQ 列表推给助手勾选",
+                            tint = TextSecondary,
+                            enabled = vm.busyAction == null && vm.accounts.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                scope.launch {
+                                    val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
+                                    val all = vm.accounts.map { it.accountCode }
+                                    val ok = if (assistant.isBlank() || all.isEmpty()) false
+                                    else container.cloudSync.sendTimAccounts(assistant, all)
+                                    snackbar.showSnackbar(
+                                        if (ok) "已推送 ${all.size} 个账号，去助手设置里勾选 TIM"
+                                        else "推送失败，先绑定助手"
+                                    )
+                                }
+                            }
                         )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ControlButton(
+                                icon = Icons.Outlined.StopCircle,
+                                title = "停止脚本",
+                                subtitle = "可同时关定时",
+                                tint = Rose,
+                                enabled = vm.busyAction == null,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    disableTimerOnStop = false
+                                    showStopDialog = true
+                                }
+                            )
+                            ControlButton(
+                                icon = Icons.Outlined.Sync,
+                                title = "同步账号",
+                                subtitle = "拉取设备账号信息",
+                                tint = Sky,
+                                enabled = vm.busyAction == null,
+                                modifier = Modifier.weight(1f),
+                                onClick = { vm.sync() }
+                            )
+                        }
                     }
                 }
             }
 
-            if (vm.sellStatus != null || vm.sellPolling) {
-            item(key = "reboot") {
-                val ctx = androidx.compose.ui.platform.LocalContext.current
-                var target by androidx.compose.runtime.remember(deviceCode) {
-                    androidx.compose.runtime.mutableStateOf(
-                        com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
-                    )
-                }
-                var bound by androidx.compose.runtime.remember(deviceCode) {
-                    androidx.compose.runtime.mutableStateOf(
-                        com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode) != null
-                    )
-                }
-                var msg by androidx.compose.runtime.remember(deviceCode) {
-                    androidx.compose.runtime.mutableStateOf<String?>(null)
-                }
-                val scope = androidx.compose.runtime.rememberCoroutineScope()
-                val cloudSync = androidx.compose.runtime.remember {
-                    com.dashabi.control.data.CloudSync(ctx, container.stamina, container.credit, container.gameNames)
-                }
-                val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
-                    val contents = result.contents?.trim().orEmpty()
-                    if (contents.isNotEmpty()) {
-                        target = contents
-                        com.dashabi.control.remote.RebootBindStore.put(ctx, deviceCode, contents)
-                        bound = true
-                        msg = "扫码绑定成功"
-                    } else {
-                        msg = "没有扫到二维码内容"
-                    }
-                }
-                DashaCard(accent = Sky) {
-                    androidx.compose.material3.Text(
-                        "绑定助手设备",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = TextPrimary
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    androidx.compose.material3.Text(
-                        "只支持扫码绑定，输入框已锁定",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    androidx.compose.foundation.layout.Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        androidx.compose.material3.OutlinedTextField(
-                            value = if (bound) maskDeviceCode(target) else target,
-                            onValueChange = { },
-                            label = { androidx.compose.material3.Text("云控助手设备码") },
-                            singleLine = true,
-                            enabled = false,
-                            modifier = Modifier.weight(1f)
+
+            if (detailSection == 2) {
+                item(key = "reboot") {
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    var target by androidx.compose.runtime.remember(deviceCode) {
+                        androidx.compose.runtime.mutableStateOf(
+                            com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
                         )
-                        if (bound) {
-                            androidx.compose.material3.OutlinedButton(onClick = {
-                                val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                                    as android.content.ClipboardManager
-                                cm.setPrimaryClip(
-                                    android.content.ClipData.newPlainText("云控助手设备码", target)
-                                )
-                                msg = "已复制设备码"
-                            }) { androidx.compose.material3.Text("复制") }
+                    }
+                    var bound by androidx.compose.runtime.remember(deviceCode) {
+                        androidx.compose.runtime.mutableStateOf(
+                            com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode) != null
+                        )
+                    }
+                    var msg by androidx.compose.runtime.remember(deviceCode) {
+                        androidx.compose.runtime.mutableStateOf<String?>(null)
+                    }
+                    var commandBusy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    val scope = androidx.compose.runtime.rememberCoroutineScope()
+                    val cloudSync = androidx.compose.runtime.remember {
+                        com.dashabi.control.data.CloudSync(ctx, container.stamina, container.credit, container.gameNames)
+                    }
+                    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+                        val contents = result.contents?.trim().orEmpty()
+                        if (contents.isNotEmpty()) {
+                            target = contents
+                            com.dashabi.control.remote.RebootBindStore.put(ctx, deviceCode, contents)
+                            bound = true
+                            msg = "扫码绑定成功"
+                        } else {
+                            msg = "没有扫到二维码内容"
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    androidx.compose.foundation.layout.Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        androidx.compose.material3.OutlinedButton(
-                            onClick = {
-                                scanLauncher.launch(
-                                    ScanOptions().apply {
-                                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                                        setPrompt("对准云控助手里的设备码二维码")
-                                        setBeepEnabled(false)
-                                        setOrientationLocked(false)
-                                    }
-                                )
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { androidx.compose.material3.Text("扫码绑定") }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    androidx.compose.foundation.layout.Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        androidx.compose.material3.OutlinedButton(
-                            enabled = bound,
-                            onClick = {
-                                com.dashabi.control.remote.RebootBindStore.remove(ctx, deviceCode)
-                                target = ""
-                                bound = false
-                                msg = "已解绑"
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { androidx.compose.material3.Text("解绑") }
-
-                        androidx.compose.material3.OutlinedButton(
-                            enabled = bound,
-                            onClick = {
-                                msg = "正在下发…"
-                                scope.launch {
-                                    val ok = runCatching {
-                                        cloudSync.sendReboot(
-                                            com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
-                                        )
-                                    }.getOrDefault(false)
-                                    msg = if (ok) "重启指令已下发" else "下发失败"
-                                }
-                            },
-                            modifier = Modifier.weight(1.35f)
-                        ) { androidx.compose.material3.Text("远程重启") }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    androidx.compose.material3.OutlinedButton(
-                        enabled = bound,
-                        onClick = {
-                            msg = "正在通知助手更新…"
-                            scope.launch {
-                                val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
-                                val ok = if (assistant.isBlank()) false else cloudSync.sendUpdate(assistant)
-                                msg = if (ok) "已通知助手下载更新" else "下发失败，检查网络"
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { androidx.compose.material3.Text("更新助手") }
-                    if (bound) {
-                        val ver = assistantVersions[deviceCode]?.takeIf { it.isNotBlank() }
-                        val latest = assistantLatest
-                        val outdated = ver != null && !latest.isNullOrBlank() && ver != latest
-                        Spacer(Modifier.height(6.dp))
+                    DashaCard(accent = Sky) {
                         androidx.compose.material3.Text(
-                            "助手版本 ${ver ?: "未上报"}" +
-                                if (outdated) "（最新 $latest）" else "",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (outdated) Rose else TextMuted
+                            "绑定助手设备",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = TextPrimary
                         )
-                    }
-                    msg?.let {
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(4.dp))
                         androidx.compose.material3.Text(
-                            it,
+                            "扫码关联云控助手，管理远程控制与版本更新",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextMuted
                         )
-                    }
-                }
-            }
-
-                item(key = "sell") {
-                    DashaCard(accent = Amber) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { sellExpanded = !sellExpanded }
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.foundation.layout.Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                         ) {
-                            Text(
-                                "出售任务",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = TextPrimary
+                            androidx.compose.material3.OutlinedTextField(
+                                value = if (bound) maskDeviceCode(target) else target,
+                                onValueChange = { },
+                                label = { androidx.compose.material3.Text("云控助手设备码") },
+                                singleLine = true,
+                                enabled = false,
+                                modifier = Modifier.weight(1f)
                             )
-                            Spacer(Modifier.weight(1f))
-                            if (vm.sellPolling) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    color = Amber,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "跟踪中",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Amber
-                                )
-                                Spacer(Modifier.width(8.dp))
+                            if (bound) {
+                                androidx.compose.material3.OutlinedButton(onClick = {
+                                    val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                        as android.content.ClipboardManager
+                                    cm.setPrimaryClip(
+                                        android.content.ClipData.newPlainText("云控助手设备码", target)
+                                    )
+                                    msg = "已复制设备码"
+                                }) { androidx.compose.material3.Text("复制") }
                             }
-                            Text(
-                                if (sellExpanded) "收起 ▴" else "展开 ▾",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Amber
-                            )
                         }
-                        if (sellExpanded) {
-                            Spacer(Modifier.height(8.dp))
-                            JsonFacts(vm.sellStatus, emptyText = "暂无出售任务")
-                            Spacer(Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(
-                                    onClick = {
-                                        val ids = vm.selected.mapNotNull { it.toLongOrNull() }
-                                        if (ids.isEmpty()) {
-                                            scope.launch { snackbar.showSnackbar("先在设备账号里勾选要出售的账号") }
-                                        } else {
-                                            val cal = java.util.Calendar.getInstance()
-                                            android.app.TimePickerDialog(
-                                                ctx,
-                                                { _, hour, minute ->
-                                                    val at = java.util.Calendar.getInstance().apply {
-                                                        set(java.util.Calendar.HOUR_OF_DAY, hour)
-                                                        set(java.util.Calendar.MINUTE, minute)
-                                                        set(java.util.Calendar.SECOND, 0)
-                                                    }.timeInMillis
-                                                    val target = if (at <= System.currentTimeMillis()) at + 24 * 3600_000L else at
-                                                    val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
-                                                    if (assistant.isBlank()) {
-                                                        scope.launch { snackbar.showSnackbar("先绑定助手，服务器才能到点通知它出售") }
-                                                    } else {
-                                                        scope.launch {
-                                                            val ok = container.cloudSync.scheduleSell(assistant, deviceCode, ids, target)
-                                                            snackbar.showSnackbar(
-                                                                if (ok) "服务器已接收：到点由助手出售 ${ids.size} 个账号"
-                                                                else "定时提交失败，检查安全令牌和网络"
-                                                            )
-                                                        }
-                                                    }
-                                                },
-                                                cal.get(java.util.Calendar.HOUR_OF_DAY),
-                                                cal.get(java.util.Calendar.MINUTE),
-                                                true
-                                            ).show()
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.foundation.layout.Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    scanLauncher.launch(
+                                        ScanOptions().apply {
+                                            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                            setPrompt("对准云控助手里的设备码二维码")
+                                            setBeepEnabled(false)
+                                            setOrientationLocked(false)
                                         }
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 0.dp)
-                                ) {
-                                    Text("定时出售", color = Rose, style = MaterialTheme.typography.labelMedium)
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                TextButton(
-                                    onClick = { vm.loadSellStatus(true) },
-                                    contentPadding = PaddingValues(horizontal = 0.dp)
-                                ) {
-                                    Text("刷新出售状态", color = Amber, style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { androidx.compose.material3.Text("扫码绑定") }
                         }
-                    }
-                }
-            }
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.foundation.layout.Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.OutlinedButton(
+                                enabled = bound && !commandBusy,
+                                onClick = {
+                                    com.dashabi.control.remote.RebootBindStore.remove(ctx, deviceCode)
+                                    target = ""
+                                    bound = false
+                                    msg = "已解绑"
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { androidx.compose.material3.Text("解绑") }
 
-            item(key = "accounts-title") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SectionTitle(
-                        "设备账号 ${vm.accounts.size}",
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = { vm.selectAll() }) {
-                        Text("全选", color = Amber, style = MaterialTheme.typography.labelMedium)
-                    }
-                    TextButton(onClick = {
-                        val ids = vm.selected.mapNotNull { it.toLongOrNull() }
-                        if (ids.isEmpty()) {
-                            scope.launch { snackbar.showSnackbar("先勾选要定时出售的账号") }
-                        } else {
-                            val cal = java.util.Calendar.getInstance()
-                            android.app.TimePickerDialog(
-                                ctx,
-                                { _, hour, minute ->
-                                    val at = java.util.Calendar.getInstance().apply {
-                                        set(java.util.Calendar.HOUR_OF_DAY, hour)
-                                        set(java.util.Calendar.MINUTE, minute)
-                                        set(java.util.Calendar.SECOND, 0)
-                                    }.timeInMillis
-                                    val target = if (at <= System.currentTimeMillis()) at + 24 * 3600_000L else at
-                                    val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
+                            androidx.compose.material3.OutlinedButton(
+                                enabled = bound && !commandBusy,
+                                onClick = {
+                                    commandBusy = true
+                                    msg = "正在下发…"
                                     scope.launch {
-                                        val ok = assistant.isNotBlank() &&
-                                            container.cloudSync.scheduleSell(assistant, deviceCode, ids, target)
-                                        snackbar.showSnackbar(if (ok) "服务器已接收定时出售" else "定时失败，检查绑定和令牌")
+                                        val ok = runCatching {
+                                            cloudSync.sendReboot(
+                                                com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
+                                            )
+                                        }.getOrDefault(false)
+                                        msg = if (ok) "重启指令已下发" else "下发失败"
+                                        commandBusy = false
                                     }
                                 },
-                                cal.get(java.util.Calendar.HOUR_OF_DAY),
-                                cal.get(java.util.Calendar.MINUTE),
-                                true
-                            ).show()
+                                modifier = Modifier.weight(1.35f)
+                            ) { androidx.compose.material3.Text("远程重启") }
                         }
-                    }) {
-                        Text("定时出售", color = Rose, style = MaterialTheme.typography.labelMedium)
-                    }
-                    if (vm.selected.isNotEmpty()) {
-                        TextButton(onClick = { vm.clearSelection() }) {
-                            Text("清空", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.material3.OutlinedButton(
+                            enabled = bound && !commandBusy,
+                            onClick = {
+                                commandBusy = true
+                                msg = "正在通知助手更新…"
+                                scope.launch {
+                                    val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
+                                    val ok = runCatching { assistant.isNotBlank() && cloudSync.sendUpdate(assistant) }.getOrDefault(false)
+                                    msg = if (ok) "已通知助手下载更新" else "下发失败，检查网络"
+                                    commandBusy = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { androidx.compose.material3.Text("更新助手") }
+                        if (bound) {
+                            val ver = assistantVersions[deviceCode]?.takeIf { it.isNotBlank() }
+                            val latest = assistantLatest
+                            val outdated = ver != null && !latest.isNullOrBlank() && ver != latest
+                            Spacer(Modifier.height(6.dp))
+                            androidx.compose.material3.Text(
+                                "助手版本 ${ver ?: "未上报"}" +
+                                    if (outdated) "（最新 $latest）" else "",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (outdated) Rose else TextMuted
+                            )
+                        }
+                        if (commandBusy) {
+                            Spacer(Modifier.height(12.dp))
+                            androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth(), color = Amber)
+                        }
+                        msg?.let {
+                            Spacer(Modifier.height(6.dp))
+                            androidx.compose.material3.Text(
+                                it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted
+                            )
                         }
                     }
                 }
             }
 
-            if (vm.loading && vm.accounts.isEmpty()) {
-                item(key = "loading") { LoadingState("正在读取账号…") }
-            } else if (vm.accounts.isEmpty()) {
-                item(key = "empty") { EmptyState("设备上没有账号", "该设备暂未同步到账号数据") }
+                if (detailSection == 1 && (vm.sellStatus != null || vm.sellPolling)) {
+                    item(key = "sell") {
+                        DashaCard(accent = Amber) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { sellExpanded = !sellExpanded }
+                            ) {
+                                Text(
+                                    "出售任务",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = TextPrimary
+                                )
+                                Spacer(Modifier.weight(1f))
+                                if (vm.sellPolling) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        color = Amber,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "跟踪中",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Amber
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(
+                                    if (sellExpanded) "收起 ▴" else "展开 ▾",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Amber
+                                )
+                            }
+                            if (sellExpanded) {
+                                Spacer(Modifier.height(8.dp))
+                                JsonFacts(vm.sellStatus, emptyText = "暂无出售任务")
+                                Spacer(Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    TextButton(
+                                        onClick = {
+                                            val ids = vm.selected.mapNotNull { it.toLongOrNull() }
+                                            if (ids.isEmpty()) {
+                                                scope.launch { snackbar.showSnackbar("先在设备账号里勾选要出售的账号") }
+                                            } else {
+                                                val cal = java.util.Calendar.getInstance()
+                                                android.app.TimePickerDialog(
+                                                    ctx,
+                                                    { _, hour, minute ->
+                                                        val at = java.util.Calendar.getInstance().apply {
+                                                            set(java.util.Calendar.HOUR_OF_DAY, hour)
+                                                            set(java.util.Calendar.MINUTE, minute)
+                                                            set(java.util.Calendar.SECOND, 0)
+                                                        }.timeInMillis
+                                                        val target = if (at <= System.currentTimeMillis()) at + 24 * 3600_000L else at
+                                                        val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
+                                                        if (assistant.isBlank()) {
+                                                            scope.launch { snackbar.showSnackbar("先绑定助手，服务器才能到点通知它出售") }
+                                                        } else {
+                                                            scope.launch {
+                                                                val ok = container.cloudSync.scheduleSell(assistant, deviceCode, ids, target)
+                                                                snackbar.showSnackbar(
+                                                                    if (ok) "服务器已接收：到点由助手出售 ${ids.size} 个账号"
+                                                                    else "定时提交失败，检查安全令牌和网络"
+                                                                )
+                                                            }
+                                                        }
+                                                    },
+                                                    cal.get(java.util.Calendar.HOUR_OF_DAY),
+                                                    cal.get(java.util.Calendar.MINUTE),
+                                                    true
+                                                ).show()
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 0.dp)
+                                    ) {
+                                        Text("定时出售", color = Rose, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    TextButton(
+                                        onClick = { vm.loadSellStatus(true) },
+                                        contentPadding = PaddingValues(horizontal = 0.dp)
+                                    ) {
+                                        Text("刷新出售状态", color = Amber, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+
+            if (detailSection == 3) {
+                item(key = "accounts-title") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SectionTitle(
+                            "设备账号 ${vm.accounts.size}",
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { vm.selectAll() }) {
+                            Text("全选", color = Amber, style = MaterialTheme.typography.labelMedium)
+                        }
+                        TextButton(onClick = {
+                            val ids = vm.selected.mapNotNull { it.toLongOrNull() }
+                            if (ids.isEmpty()) {
+                                scope.launch { snackbar.showSnackbar("先勾选要定时出售的账号") }
+                            } else {
+                                val cal = java.util.Calendar.getInstance()
+                                android.app.TimePickerDialog(
+                                    ctx,
+                                    { _, hour, minute ->
+                                        val at = java.util.Calendar.getInstance().apply {
+                                            set(java.util.Calendar.HOUR_OF_DAY, hour)
+                                            set(java.util.Calendar.MINUTE, minute)
+                                            set(java.util.Calendar.SECOND, 0)
+                                        }.timeInMillis
+                                        val target = if (at <= System.currentTimeMillis()) at + 24 * 3600_000L else at
+                                        val assistant = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode).orEmpty()
+                                        scope.launch {
+                                            val ok = assistant.isNotBlank() &&
+                                                container.cloudSync.scheduleSell(assistant, deviceCode, ids, target)
+                                            snackbar.showSnackbar(if (ok) "服务器已接收定时出售" else "定时失败，检查绑定和令牌")
+                                        }
+                                    },
+                                    cal.get(java.util.Calendar.HOUR_OF_DAY),
+                                    cal.get(java.util.Calendar.MINUTE),
+                                    true
+                                ).show()
+                            }
+                        }) {
+                            Text("定时出售", color = Rose, style = MaterialTheme.typography.labelMedium)
+                        }
+                        if (vm.selected.isNotEmpty()) {
+                            TextButton(onClick = { vm.clearSelection() }) {
+                                Text("清空", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
             }
 
-            items(vm.accounts, key = { it.accountCode }) { account ->
+            if (detailSection == 3) {
+                if (vm.loading && vm.accounts.isEmpty()) {
+                    item(key = "loading") { LoadingState("正在读取账号…") }
+                } else if (vm.accounts.isEmpty()) {
+                    item(key = "empty") { EmptyState("设备上没有账号", "该设备暂未同步到账号数据") }
+                }
+
+                items(vm.accounts, key = { it.accountCode }) { account ->
                 DeviceAccountRow(
                     account = account,
                     hafDelta = hafDeltaFor(account),
@@ -686,6 +735,7 @@ fun DeviceDetailScreen(
                     onToggle = { vm.toggleSelection(account.accountCode) },
                     onOpen = { onOpenAccount(deviceCode, account.accountCode) }
                 )
+                }
             }
         }
     }

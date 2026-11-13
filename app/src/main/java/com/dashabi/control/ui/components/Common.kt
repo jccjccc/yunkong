@@ -5,6 +5,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
@@ -52,12 +55,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -92,34 +91,16 @@ fun DashaCard(
     modifier: Modifier = Modifier,
     accent: Color? = null,
     onClick: (() -> Unit)? = null,
-    contentPadding: PaddingValues = PaddingValues(16.dp),
+    contentPadding: PaddingValues = PaddingValues(12.dp),
+    containerColor: Color = Surface1,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(20.dp)
-    val radius = 20.dp
-    val surface = Surface1
-    val border = Line
+    val shape = RoundedCornerShape(12.dp)
     val base = modifier
         .fillMaxWidth()
-        .shadow(6.dp, shape, clip = false)
         .clip(shape)
-        .drawBehind {
-            val r = radius.toPx()
-            drawRoundRect(color = surface, cornerRadius = CornerRadius(r, r))
-            accent?.let {
-                drawRoundRect(
-                    color = it,
-                    size = Size(3.dp.toPx(), size.height),
-                    cornerRadius = CornerRadius(r, r)
-                )
-            }
-            drawRoundRect(
-                color = border.copy(alpha = 0.85f),
-                size = size,
-                cornerRadius = CornerRadius(r, r),
-                style = Stroke(width = 1.dp.toPx())
-            )
-        }
+        .background(containerColor)
+        .border(0.75.dp, accent?.copy(alpha = 0.20f) ?: Line.copy(alpha = 0.55f), shape)
         .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
         .padding(contentPadding)
     Column(modifier = base, content = content)
@@ -136,8 +117,7 @@ fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier, dot: B
         modifier = modifier
             .clip(shape)
             .background(color.copy(alpha = 0.13f))
-            .border(1.dp, color.copy(alpha = 0.32f), shape)
-            .padding(horizontal = 9.dp, vertical = 3.dp),
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (dot) {
@@ -178,7 +158,7 @@ fun SectionTitle(
     trailing: @Composable (() -> Unit)? = null
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -207,7 +187,7 @@ fun StatBlock(
             text = value,
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 22.sp,
+                fontSize = 28.sp,
                 fontFamily = FontFamily.Monospace
             ),
             color = valueColor,
@@ -279,15 +259,16 @@ fun TinyAction(
     tint: Color = TextSecondary
 ) {
     val color = if (enabled) tint else TextMuted.copy(alpha = 0.45f)
-    Column(
+    Row(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 7.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 8.dp, vertical = 13.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.height(3.dp))
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
         Text(label, color = color, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
@@ -488,7 +469,7 @@ fun DashaTopBar(
 ) {
     TopAppBar(
         title = {
-            Column(Modifier.padding(vertical = 2.dp)) {
+            Column(Modifier.padding(vertical = 4.dp)) {
                 Text(
                     title,
                     style = MaterialTheme.typography.titleLarge,
@@ -497,6 +478,7 @@ fun DashaTopBar(
                     overflow = TextOverflow.Ellipsis
                 )
                 if (!subtitle.isNullOrBlank()) {
+                    Spacer(Modifier.height(3.dp))
                     Text(
                         subtitle,
                         style = MaterialTheme.typography.labelMedium,
@@ -552,97 +534,36 @@ fun DashaBottomBar(
         containerColor = Surface1,
         tonalElevation = 0.dp,
         modifier = Modifier.drawBehind {
-            drawLine(
-                color = dividerColor,
-                start = Offset(0f, 0f),
-                end = Offset(size.width, 0f),
-                strokeWidth = 1.dp.toPx()
-            )
+            drawLine(dividerColor, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
         }
     ) {
         val colors = NavigationBarItemDefaults.colors(
-            selectedIconColor = Amber,
-            selectedTextColor = Amber,
-            unselectedIconColor = TextMuted,
-            unselectedTextColor = TextMuted,
-            indicatorColor = Amber.copy(alpha = 0.14f)
+            selectedIconColor = Amber, selectedTextColor = Amber,
+            unselectedIconColor = TextMuted, unselectedTextColor = TextMuted,
+            indicatorColor = Amber.copy(alpha = 0.13f)
         )
-        val hasDeviceAbnormal = deviceAbnormalCount > 0
-        val deviceColors = if (hasDeviceAbnormal) {
-            NavigationBarItemDefaults.colors(
-                selectedIconColor = Rose,
-                selectedTextColor = Rose,
-                unselectedIconColor = Rose,
-                unselectedTextColor = Rose,
-                indicatorColor = Rose.copy(alpha = 0.12f)
-            )
-        } else {
-            colors
-        }
-        NavigationBarItem(
-            selected = selected == 0,
-            onClick = { onSelect(0) },
-            modifier = Modifier.testTag("tab_devices"),
-            icon = {
-                if (hasDeviceAbnormal) {
-                    BadgedBox(
-                        badge = {
-                            Badge(containerColor = Rose, contentColor = Color.White) {
-                                Text("$deviceAbnormalCount")
-                            }
+        val destinations = listOf(
+            Triple(0, "设备", devicesIcon), Triple(2, "账号", accountsIcon),
+            Triple(1, "异常", abnormalIcon), Triple(3, "设置", Icons.Outlined.Settings)
+        )
+        destinations.forEach { (index, title, icon) ->
+            val count = when (index) { 0 -> deviceAbnormalCount; 1 -> abnormalCount; else -> 0 }
+            val tag = when (index) { 0 -> "tab_devices"; 1 -> "tab_abnormal"; 2 -> "tab_accounts"; else -> "tab_settings" }
+            NavigationBarItem(
+                selected = selected == index,
+                onClick = { onSelect(index) },
+                modifier = Modifier.testTag(tag),
+                icon = {
+                    BadgedBox(badge = {
+                        if (count > 0) Badge(containerColor = Rose, contentColor = MaterialTheme.colorScheme.onError) {
+                            Text(if (count > 99) "99+" else "$count")
                         }
-                    ) { Icon(devicesIcon, contentDescription = null) }
-                } else {
-                    Icon(devicesIcon, contentDescription = null)
-                }
-            },
-            label = { Text("设备", style = MaterialTheme.typography.labelMedium) },
-            colors = deviceColors
-        )
-
-        val hasAbnormal = abnormalCount > 0
-        val abnormalColors = if (hasAbnormal) {
-            NavigationBarItemDefaults.colors(
-                selectedIconColor = Rose,
-                selectedTextColor = Rose,
-                unselectedIconColor = Rose,
-                unselectedTextColor = Rose,
-                indicatorColor = Rose.copy(alpha = 0.12f)
+                    }) { Icon(icon, contentDescription = null) }
+                },
+                label = { Text(title, style = MaterialTheme.typography.labelMedium) },
+                colors = colors
             )
-        } else {
-            colors
         }
-        NavigationBarItem(
-            selected = selected == 1,
-            onClick = { onSelect(1) },
-            modifier = Modifier.testTag("tab_abnormal"),
-            icon = {
-                if (hasAbnormal) {
-                    BadgedBox(
-                        badge = {
-                            Badge(containerColor = Rose, contentColor = Color.White) {
-                                Text("$abnormalCount")
-                            }
-                        }
-                    ) {
-                        Icon(abnormalIcon, contentDescription = null)
-                    }
-                } else {
-                    Icon(abnormalIcon, contentDescription = null)
-                }
-            },
-            label = { Text("异常", style = MaterialTheme.typography.labelMedium) },
-            colors = abnormalColors
-        )
-
-        NavigationBarItem(
-            selected = selected == 2,
-            onClick = { onSelect(2) },
-            modifier = Modifier.testTag("tab_accounts"),
-            icon = { Icon(accountsIcon, contentDescription = null) },
-            label = { Text("账号", style = MaterialTheme.typography.labelMedium) },
-            colors = colors
-        )
     }
 }
 
@@ -667,7 +588,7 @@ fun ConfirmDialog(
         textContentColor = TextSecondary,
         title = { Text(title, style = MaterialTheme.typography.titleMedium) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(message, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 extra?.let {
                     Spacer(Modifier.height(10.dp))

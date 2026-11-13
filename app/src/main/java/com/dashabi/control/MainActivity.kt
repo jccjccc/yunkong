@@ -247,9 +247,16 @@ private fun versionGreater(a: String, b: String): Boolean {
     return false
 }
 
-private fun downloadAndInstall(context: android.content.Context, url: String, sha: String) {
+internal fun downloadAndInstall(
+    context: android.content.Context,
+    url: String,
+    sha: String,
+    onStatus: (String) -> Unit = {},
+    onFinished: () -> Unit = {}
+) {
     fun toast(msg: String) {
         android.os.Handler(android.os.Looper.getMainLooper()).post {
+            onStatus(msg)
             android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
         }
     }
@@ -336,8 +343,11 @@ private fun downloadAndInstall(context: android.content.Context, url: String, sh
                 .setDataAndType(uri, "application/vnd.android.package-archive")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
+            toast("安装包已校验，已打开系统安装器")
         } catch (e: Exception) {
             toast("更新失败：" + (e.message ?: e.javaClass.simpleName))
+        } finally {
+            android.os.Handler(android.os.Looper.getMainLooper()).post { onFinished() }
         }
     }.start()
 }

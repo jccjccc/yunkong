@@ -44,7 +44,10 @@ class AppUiSmokeTest {
         compose.waitUntil(timeoutMillis = 30_000) {
             compose.onAllNodesWithText("账号总览").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("哈夫币合计").assertExists()
+        // A clean installation has no service key; onboarding must remain reachable.
+        compose.onNodeWithText("还没有配置 API Key").assertExists()
+        compose.onNodeWithTag("tab_settings").performClick()
+        compose.onNodeWithText("我的工作空间").assertExists()
 
         compose.onNodeWithTag("tab_devices").performClick()
         compose.waitUntil(timeoutMillis = 30_000) {
@@ -81,29 +84,18 @@ class AppUiSmokeTest {
         }
         compose.onNodeWithTag("tab_abnormal").performClick()
         compose.waitUntil(timeoutMillis = 30_000) {
-            compose.onAllNodesWithText("异常账号").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("异常中心").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("异常判定").assertExists()
     }
 
     @Test
-    fun compact_mode_toggles() {
-        compose.setContent {
-            DashaTheme {
-                DashaRoot()
-            }
-        }
-        compose.waitUntil(timeoutMillis = 30_000) {
-            compose.onAllNodesWithText("设备总览").fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithTag("tab_accounts").performClick()
-        compose.waitUntil(timeoutMillis = 30_000) {
-            compose.onAllNodesWithText("账号总览").fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithContentDescription("切换为缩略模式").performClick()
-        compose.onNodeWithContentDescription("切换为标准模式").assertExists()
-        compose.onNodeWithContentDescription("切换为标准模式").performClick()
-        compose.onNodeWithContentDescription("切换为缩略模式").assertExists()
+    fun missing_key_opens_connection_settings() {
+        compose.setContent { DashaTheme { DashaRoot() } }
+        compose.onNodeWithText("去设置 Key").performClick()
+        compose.onNodeWithText("我的工作空间").assertExists()
+        compose.onNodeWithText("服务连接").performClick()
+        compose.onNodeWithText("保存并测试连接").assertExists()
     }
 
     @Test
@@ -136,7 +128,11 @@ class AppUiSmokeTest {
         compose.waitUntil(timeoutMillis = 30_000) {
             compose.onAllNodesWithText("设备详情").fetchSemanticsNodes().isNotEmpty()
         }
+        compose.onNodeWithText("控制").performClick()
         compose.onNodeWithText("设备控制").assertExists()
+        compose.onNodeWithText("助手").performClick()
+        // Assistant management must be available even when there is no sell task.
+        compose.onNodeWithText("绑定助手设备").assertExists()
     }
 
     @Test

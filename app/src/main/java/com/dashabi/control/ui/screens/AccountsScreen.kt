@@ -1,5 +1,6 @@
 package com.dashabi.control.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -217,6 +218,23 @@ fun AccountsScreen(
         }
     }
 
+    val openPeak: () -> Unit = {
+        showHafPeak = true
+        hafPeakLoading = true
+        yesterdayPeakMap = emptyMap()
+        scope.launch {
+            val today6 = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 6)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val start = today6 - 24 * 3600_000L
+            yesterdayPeakMap = container.cloudSync.hafMaxSince(start, today6)
+            hafPeakLoading = false
+        }
+    }
+
     Scaffold(
         topBar = {
             DashaTopBar(
@@ -228,48 +246,6 @@ fun AccountsScreen(
                 },
                 loading = vm.loading,
                 actions = {
-                    if (hasKey) {
-                        val totalColor = when (vm.statusFilter) {
-                            "paused" -> Amber
-                            "device_stopped" -> Rose
-                            else -> Mint
-                        }
-                        Column(
-                            modifier = Modifier
-                                .padding(end = 4.dp)
-                                .clickable {
-                                    showHafPeak = true
-                                    hafPeakLoading = true
-                                    yesterdayPeakMap = emptyMap()
-                                    scope.launch {
-                                        val today6 = java.util.Calendar.getInstance().apply {
-                                            set(java.util.Calendar.HOUR_OF_DAY, 6)
-                                            set(java.util.Calendar.MINUTE, 0)
-                                            set(java.util.Calendar.SECOND, 0)
-                                            set(java.util.Calendar.MILLISECOND, 0)
-                                        }.timeInMillis
-                                        val start = today6 - 24 * 3600_000L
-                                        yesterdayPeakMap = container.cloudSync.hafMaxSince(start, today6)
-                                        hafPeakLoading = false
-                                    }
-                                },
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            Text(
-                                "哈夫币总额",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextMuted
-                            )
-                            Text(
-                                formatWanAmount(displayAccounts.sumOf { parseCompactNumber(it.hafCoin) ?: 0.0 }),
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = totalColor,
-                                maxLines = 1
-                            )
-                        }
-                    }
                     IconButton(onClick = { vm.resetFiltersForRefresh(); vm.refresh() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = TextSecondary)
                     }
@@ -361,106 +337,107 @@ fun AccountsScreen(
         }
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (!hasKey) {
-                Box(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp)) {
+                Box(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 12.dp)) {
                     ConfigureKeyCard(onOpenSettings = onOpenSettings)
                 }
             } else {
-            SearchBar(
-                value = searchText,
-                onValueChange = { searchText = it },
-                onClear = {
-                    searchText = ""
-                    vm.setSearch("")
-                },
-                onSearch = {
-                    vm.setSearch(searchText)
-                    focus.clearFocus()
-                },
-                onFocus = { vm.resetFiltersForSearch() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 2.dp)
-            )
-
-            StatusFilterRow(vm)
-
-            CreditFilterRow(vm.accounts, credits, vm.creditFilter) { vm.selectCredit(it) }
-
-            if (vm.deviceOptions.size > 1) {
-                DeviceFilterRow(vm)
-            }
-
-            SortRow(vm, compactMode) { container.uiPrefs.setCompactMode(!compactMode) }
-
-            HorizontalDivider(color = Line, thickness = 1.dp)
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = listState,
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 22.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (vm.loading && vm.accounts.isEmpty()) {
-                    item(key = "loading") { LoadingState("正在获取账号…") }
-                }
-                vm.error?.let { message ->
-                    item(key = "error") { ErrorState(message, onRetry = { vm.refresh() }) }
-                }
-                if (!vm.loading && displayAccounts.isEmpty() && vm.error == null) {
-                    item(key = "empty") {
-                        if (vm.query.isNotBlank()) {
-                            EmptyState("没有匹配的账号", "换个关键词，或清空搜索条件再试")
-                        } else {
-                            EmptyState("还没有账号", "当前 API Key 下没有任何账号")
-                        }
-                    }
-                }
-                if (compactMode) {
-                    items(
-                        items = displayAccounts.chunked(2),
-                        key = { row -> row.joinToString("|") { it.accountCode } }
-                    ) { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            row.forEach { account ->
-                                CompactAccountCard(
-                                    account = account,
-                                    levels = staminaLevels[account.accountCode],
-                                    creditScore = credits[account.accountCode]?.score,
-                            creditPrevious = credits[account.accountCode]?.previousScore,
-                                    hafDelta = hafDeltaFor(account),
-                                    annotation = vm.annotations[account.accountCode],
-                                            gameName = gameNames[account.accountCode]?.name,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = { onOpenAccount(account) }
-                                )
-                            }
-                            if (row.size == 1) {
-                                Spacer(Modifier.weight(1f))
-                            }
-                        }
-                    }
-                } else {
-                    items(
-                        items = displayAccounts,
-                        key = { "${it.deviceCode}/${it.accountCode}" }
-                    ) { account ->
-                        AccountCard(
-                            account = account,
-                            levels = staminaLevels[account.accountCode],
-                            creditScore = credits[account.accountCode]?.score,
-                            creditPrevious = credits[account.accountCode]?.previousScore,
-                            hafDelta = hafDeltaFor(account),
-                            annotation = vm.annotations[account.accountCode],
-                            gameName = gameNames[account.accountCode]?.name,
-                            onOpen = { onOpenAccount(account) },
-                            onTogglePause = {
-                                if (account.paused) togglePause(account) else pendingPause = account
-                            },
-                            onSell = { pendingSell = account }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 22.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item(key = "balance") {
+                        AccountBalanceSummary(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            total = formatWanAmount(displayAccounts.sumOf { parseCompactNumber(it.hafCoin) ?: 0.0 }),
+                            count = displayAccounts.size,
+                            onClick = openPeak
                         )
                     }
+                    item(key = "controls") {
+                        AccountListControls(
+                            advancedActive = vm.creditFilter != "all" || vm.deviceFilter != null,
+                            search = {
+                                SearchBar(
+                                    value = searchText,
+                                    onValueChange = { searchText = it },
+                                    onClear = { searchText = ""; vm.setSearch("") },
+                                    onSearch = { vm.setSearch(searchText); focus.clearFocus() },
+                                    onFocus = { vm.resetFiltersForSearch() },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+                                )
+                            },
+                            statusFilters = { StatusFilterRow(vm) },
+                            advancedFilters = {
+                                CreditFilterRow(vm.accounts, credits, vm.creditFilter) { vm.selectCredit(it) }
+                                if (vm.deviceOptions.size > 1) DeviceFilterRow(vm)
+                            },
+                            sort = { SortRow(vm, compactMode) { container.uiPrefs.setCompactMode(!compactMode) } }
+                        )
+                    }
+                    if (vm.loading && vm.accounts.isEmpty()) {
+                        item(key = "loading") { LoadingState("正在获取账号…") }
+                    }
+                    vm.error?.let { message ->
+                        item(key = "error") { ErrorState(message, onRetry = { vm.refresh() }, modifier = Modifier.padding(horizontal = 12.dp)) }
+                    }
+                    if (!vm.loading && displayAccounts.isEmpty() && vm.error == null) {
+                        item(key = "empty") {
+                            if (vm.query.isNotBlank()) {
+                                EmptyState("没有匹配的账号", "换个关键词，或清空搜索条件再试")
+                            } else {
+                                EmptyState("还没有账号", "当前 API Key 下没有任何账号")
+                            }
+                        }
+                    }
+                    if (compactMode) {
+                        items(
+                            items = displayAccounts.chunked(2),
+                            key = { row -> row.joinToString("|") { it.accountCode } }
+                        ) { row ->
+                            Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                row.forEach { account ->
+                                    CompactAccountCard(
+                                        account = account,
+                                        levels = staminaLevels[account.accountCode],
+                                        creditScore = credits[account.accountCode]?.score,
+                                        creditPrevious = credits[account.accountCode]?.previousScore,
+                                        hafDelta = hafDeltaFor(account),
+                                        annotation = vm.annotations[account.accountCode],
+                                        gameName = gameNames[account.accountCode]?.name,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { onOpenAccount(account) }
+                                    )
+                                }
+                                if (row.size == 1) {
+                                    Spacer(Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    } else {
+                        items(
+                            items = displayAccounts,
+                            key = { "${it.deviceCode}/${it.accountCode}" }
+                        ) { account ->
+                            AccountCard(
+                                account = account,
+                                levels = staminaLevels[account.accountCode],
+                                creditScore = credits[account.accountCode]?.score,
+                                creditPrevious = credits[account.accountCode]?.previousScore,
+                                hafDelta = hafDeltaFor(account),
+                                annotation = vm.annotations[account.accountCode],
+                                gameName = gameNames[account.accountCode]?.name,
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                onOpen = { onOpenAccount(account) },
+                                onTogglePause = {
+                                    if (account.paused) togglePause(account) else pendingPause = account
+                                },
+                                onSell = { pendingSell = account }
+                            )
+                        }
+                    }
                 }
-            }
             }
         }
     }
@@ -506,7 +483,7 @@ fun AccountsScreen(
 }
 
 @Composable
-private fun SearchBar(
+internal fun SearchBar(
     value: String,
     onValueChange: (String) -> Unit,
     onClear: () -> Unit,
@@ -519,7 +496,7 @@ private fun SearchBar(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier
-            .height(42.dp)
+            .height(48.dp)
             .onFocusChanged { if (it.isFocused) onFocus() },
         singleLine = true,
         textStyle = MaterialTheme.typography.bodySmall.copy(color = TextPrimary),
@@ -573,7 +550,7 @@ private fun SearchBar(
 private fun StatusFilterRow(vm: AccountsViewModel) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(AccountStatusFilters, key = { it.first }) { (key, label) ->
@@ -591,7 +568,7 @@ private fun StatusFilterRow(vm: AccountsViewModel) {
 private fun DeviceFilterRow(vm: AccountsViewModel) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item(key = "all-devices") {
@@ -623,7 +600,7 @@ private fun SortRow(
     ) {
         LazyRow(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -666,7 +643,7 @@ private fun SortRow(
 }
 
 @Composable
-private fun SortChip(
+internal fun SortChip(
     label: String,
     selected: Boolean,
     showArrow: Boolean,
@@ -677,8 +654,8 @@ private fun SortChip(
     Row(
         modifier = Modifier
             .clip(shape)
-            .background(if (selected) Amber.copy(alpha = 0.15f) else Surface1)
-            .border(1.dp, if (selected) Amber.copy(alpha = 0.45f) else Line, shape)
+            .background(if (selected) Amber.copy(alpha = 0.14f) else Color.Transparent)
+            .border(1.dp, if (selected) Amber.copy(alpha = 0.3f) else Line.copy(alpha = 0.55f), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -700,7 +677,7 @@ private fun SortChip(
 }
 
 @Composable
-private fun FilterPill(
+internal fun FilterPill(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -710,8 +687,8 @@ private fun FilterPill(
     Row(
         modifier = Modifier
             .clip(shape)
-            .background(if (selected) Amber.copy(alpha = 0.15f) else Surface1)
-            .border(1.dp, if (selected) Amber.copy(alpha = 0.45f) else Line, shape)
+            .background(if (selected) Amber.copy(alpha = 0.14f) else Color.Transparent)
+            .border(1.dp, if (selected) Amber.copy(alpha = 0.3f) else Line.copy(alpha = 0.55f), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -734,7 +711,7 @@ private fun FilterPill(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AccountCard(
+internal fun AccountCard(
     account: Account,
     levels: StaminaLevels?,
     creditScore: Int?,
@@ -742,6 +719,7 @@ private fun AccountCard(
     hafDelta: String? = null,
     annotation: String? = null,
     gameName: String?,
+    modifier: Modifier = Modifier,
     onOpen: () -> Unit,
     onTogglePause: () -> Unit,
     onSell: () -> Unit
@@ -750,58 +728,27 @@ private fun AccountCard(
     val remark = account.upstreamRemark?.trim()?.takeIf { it.isNotEmpty() }
     val displayGameName = gameName?.trim()?.takeIf { it.isNotEmpty() } ?: account.gameNick
     val overdue = if (account.paused) FacilityTimes.maxOverdue(account.facilities) else null
-    DashaCard(accent = style.color, onClick = onOpen) {
+    DashaCard(modifier = modifier, accent = style.color, onClick = onOpen) {
         Column(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (remark != null) {
-                        Text(
-                            "备注",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Amber,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Amber.copy(alpha = 0.14f))
-                                .padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             remark ?: displayGameName ?: "未命名账号",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
                             color = TextPrimary,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
-                        annotation?.takeIf { it.isNotBlank() }?.let {
-                            Spacer(Modifier.width(6.dp))
-                            Text(it, style = MaterialTheme.typography.labelSmall, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    if (creditScore != null) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "信用 $creditScore",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (creditScore < 350) Rose else Mint
-                        )
-                        creditPrevious?.let { prev ->
-                            val delta = creditScore - prev
-                            if (delta != 0) {
-                                Spacer(Modifier.width(3.dp))
-                                Text(
-                                    if (delta > 0) "+$delta" else "$delta",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (delta > 0) Mint else Rose
-                                )
-                            }
-                        }
                     }
                     Spacer(Modifier.width(6.dp))
                     StatusPill(style.label, style.color)
                 }
-                Spacer(Modifier.height(3.dp))
+                annotation?.takeIf { it.isNotBlank() }?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         loginTypeLabel(account.loginType),
@@ -824,6 +771,11 @@ private fun AccountCard(
                     verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     InfoChip(account.deviceName ?: "未知设备")
+                    if (creditScore != null) {
+                        val delta = creditPrevious?.let { creditScore - it } ?: 0
+                        val change = if (delta > 0) " +$delta" else if (delta < 0) " $delta" else ""
+                        InfoChip("信用 $creditScore$change", if (creditScore < 350) Rose else TextSecondary)
+                    }
                     account.gameId?.takeIf { it.isNotBlank() }?.let { gameId ->
                         InfoChip("游戏 ID $gameId")
                     }
@@ -840,19 +792,19 @@ private fun AccountCard(
                 }
             }
 
-        Spacer(Modifier.height(11.dp))
+        Spacer(Modifier.height(7.dp))
 
         Row(Modifier.fillMaxWidth()) {
-            MiniStat("总资产", account.totalAsset ?: "—", Amber, Modifier.weight(1f))
+            MiniStat("总资产", account.totalAsset ?: "—", TextPrimary, Modifier.weight(1f))
             MiniStat("哈夫币", formatHafCoinWan(account.hafCoin), Mint, Modifier.weight(1f))
-            MiniStat("行动等级", account.actionLevel ?: "—", Sky, Modifier.weight(1f))
+            MiniStat("行动等级", account.actionLevel ?: "—", TextPrimary, Modifier.weight(1f))
         }
         Spacer(Modifier.height(4.dp))
         Row {
             Text(
                 "24h 峰值对比 ",
                 style = MaterialTheme.typography.labelSmall,
-                color = androidx.compose.ui.graphics.Color(0xFFB388FF)
+                color = TextMuted
             )
             val delta = hafDelta ?: "—"
             Text(
@@ -862,9 +814,9 @@ private fun AccountCard(
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(5.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             InfoChip("体力 ${levels?.training?.let { "Lv$it" } ?: "—"}", Mint)
             InfoChip("负重 ${levels?.range?.let { "Lv$it" } ?: "—"}", Sky)
             InfoChip(
@@ -873,8 +825,8 @@ private fun AccountCard(
             )
         }
 
-        if (displayGameName != null) {
-            Spacer(Modifier.height(8.dp))
+        if (displayGameName != null && !remark.isNullOrBlank() && remark != displayGameName) {
+            Spacer(Modifier.height(5.dp))
             Text(
                 "游戏名 · ${displayGameName}",
                 style = MaterialTheme.typography.labelSmall,
@@ -884,8 +836,10 @@ private fun AccountCard(
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(5.dp))
 
+        HorizontalDivider(color = Line.copy(alpha = 0.55f))
+        Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TinyAction(
                 icon = if (account.paused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
@@ -917,10 +871,7 @@ private fun MiniStat(label: String, value: String, color: androidx.compose.ui.gr
     Column(modifier) {
         Text(
             value,
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            ),
+            style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum", fontWeight = FontWeight.SemiBold),
             color = color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -929,8 +880,9 @@ private fun MiniStat(label: String, value: String, color: androidx.compose.ui.gr
     }
 }
 /** 缩略模式下的双列账号卡片：只展示备注 / 总资产 / 哈夫币 / 行动等级 / 体力负重。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CompactAccountCard(
+internal fun CompactAccountCard(
     account: Account,
     levels: StaminaLevels?,
     creditScore: Int?,
@@ -951,24 +903,12 @@ private fun CompactAccountCard(
         contentPadding = PaddingValues(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (remark != null) {
-                Text(
-                    "备注",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Amber,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Amber.copy(alpha = 0.14f))
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                )
-                Spacer(Modifier.width(4.dp))
-            }
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     remark ?: displayGameName ?: "未命名",
                     style = MaterialTheme.typography.titleSmall,
                     color = TextPrimary,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
@@ -977,36 +917,17 @@ private fun CompactAccountCard(
                     Text(it, style = MaterialTheme.typography.labelSmall, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (creditScore != null) {
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "$creditScore",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = if (creditScore < 350) Rose else Mint
-                )
-                creditPrevious?.let { prev ->
-                    val delta = creditScore - prev
-                    if (delta != 0) {
-                        Spacer(Modifier.width(3.dp))
-                        Text(
-                            if (delta > 0) "+$delta" else "$delta",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (delta > 0) Mint else Rose
-                        )
-                    }
-                }
-            }
         }
         Spacer(Modifier.height(8.dp))
         Row {
-            CompactStat("总资产", account.totalAsset ?: "—", Amber, Modifier.weight(1f))
+            CompactStat("总资产", account.totalAsset ?: "—", TextPrimary, Modifier.weight(1f))
             CompactStat("哈夫币", formatHafCoinWan(account.hafCoin), Mint, Modifier.weight(1f))
         }
         Row {
             Text(
                 "24h ",
                 style = MaterialTheme.typography.labelSmall,
-                color = androidx.compose.ui.graphics.Color(0xFFB388FF)
+                color = TextMuted
             )
             val delta = hafDelta ?: "—"
             Text(
@@ -1022,7 +943,13 @@ private fun CompactAccountCard(
             CompactStat("负重", levels?.range?.let { "Lv$it" } ?: "—", Sky, Modifier.weight(1f))
         }
         Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            InfoChip(style.label, style.color)
+            if (creditScore != null) {
+                val delta = creditPrevious?.let { creditScore - it } ?: 0
+                val change = if (delta > 0) " +$delta" else if (delta < 0) " $delta" else ""
+                InfoChip("信用 $creditScore$change", if (creditScore < 350) Rose else TextSecondary)
+            }
             InfoChip(
                 levels?.awBullets?.let { "${it}发AW子弹" } ?: "AW子弹 —",
                 Amber
@@ -1067,7 +994,7 @@ private fun CreditFilterRow(
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item(key = "credit-all") {
@@ -1085,5 +1012,50 @@ private fun CreditFilterRow(
             val count = accounts.count { credits[it.accountCode]?.score == null }
             FilterPill(label = "未登记", selected = selected == "none", onClick = { onSelect("none") }, count = count)
         }
+    }
+}
+
+/** 当前筛选结果的资产概览，点击沿用原有的峰值对比操作。 */
+@Composable
+internal fun AccountBalanceSummary(total: String, count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    DashaCard(modifier = modifier, onClick = onClick, containerColor = com.dashabi.control.ui.theme.HeroStart, contentPadding = PaddingValues(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("哈夫币合计", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+                Text(total, color = Mint, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("当前筛选 · $count 个", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("查看昨日峰值对比", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+
+/** 搜索、筛选、排序共用布局；界面预览与正式页面共享此组件。 */
+@Composable
+internal fun AccountListControls(
+    advancedActive: Boolean,
+    search: @Composable () -> Unit,
+    statusFilters: @Composable () -> Unit,
+    advancedFilters: @Composable () -> Unit,
+    sort: @Composable () -> Unit
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Column {
+        search()
+        statusFilters()
+        Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { sort() }
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "收起筛选" else if (advancedActive) "更多筛选 · 已启用" else "更多筛选", color = Amber)
+            }
+        }
+        AnimatedVisibility(visible = expanded) { Column { advancedFilters() } }
+        HorizontalDivider(color = Line.copy(alpha = 0.65f))
     }
 }

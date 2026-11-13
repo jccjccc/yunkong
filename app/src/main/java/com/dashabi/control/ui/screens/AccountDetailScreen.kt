@@ -1,6 +1,8 @@
 package com.dashabi.control.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -48,6 +50,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -95,6 +98,9 @@ import com.dashabi.control.ui.FacilityTimes
 import com.dashabi.control.ui.accountStatusStyle
 import com.dashabi.control.ui.components.ConfirmDialog
 import com.dashabi.control.ui.components.DashaCard
+import com.dashabi.control.ui.components.DetailSectionTabs
+import com.dashabi.control.ui.components.PageSectionIntro
+import com.dashabi.control.ui.components.OperationFeedback
 import com.dashabi.control.ui.components.DashaTopBar
 import com.dashabi.control.ui.components.EmptyState
 import com.dashabi.control.ui.components.InfoChip
@@ -218,8 +224,13 @@ fun AccountDetailScreen(
         return container.repo.absoluteUrl(info.url) ?: container.repo.imageUrl(deviceCode, accountCode, kind)
     }
 
+    var detailSection by androidx.compose.runtime.saveable.rememberSaveable(deviceCode, accountCode) { androidx.compose.runtime.mutableStateOf(0) }
+    val detailListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(detailSection) { detailListState.scrollToItem(0) }
+
     Scaffold(
         topBar = {
+            Column {
             DashaTopBar(
                 title = vm.account?.let { account ->
                     account.upstreamRemark?.trim()?.takeIf { it.isNotEmpty() }
@@ -235,6 +246,8 @@ fun AccountDetailScreen(
                     }
                 }
             )
+            DetailSectionTabs(listOf("概览", "资产", "操作", "资料"), detailSection) { detailSection = it }
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = Ink
@@ -261,695 +274,694 @@ fun AccountDetailScreen(
         val remark = account.upstreamRemark?.trim()?.takeIf { it.isNotEmpty() }
 
         LazyColumn(
+            state = detailListState,
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item(key = "hero") {
-                DashaCard(accent = style.color) {
-                    Column(Modifier.fillMaxWidth()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (remark != null) {
+            if (detailSection == 0) {
+                item(key = "hero") {
+                    DashaCard(accent = style.color) {
+                        Column(Modifier.fillMaxWidth()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (remark != null) {
+                                        Text(
+                                            "备注",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Amber,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Amber.copy(alpha = 0.14f))
+                                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                    }
                                     Text(
-                                        "备注",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Amber,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(Amber.copy(alpha = 0.14f))
-                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                        remark ?: syncedGameName ?: account.gameNick ?: "未命名账号",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = TextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
                                     )
                                     Spacer(Modifier.width(6.dp))
+                                    StatusPill(style.label, style.color)
                                 }
-                                Text(
-                                    remark ?: syncedGameName ?: account.gameNick ?: "未命名账号",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                StatusPill(style.label, style.color)
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedTextField(
-                                    value = annotationText,
-                                    onValueChange = { annotationText = it.take(500) },
-                                    modifier = Modifier.weight(1f).height(46.dp),
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodySmall,
-                                    shape = RoundedCornerShape(8.dp),
-                                    placeholder = { Text("标注文字", style = MaterialTheme.typography.bodySmall, color = TextMuted) }
-                                )
-                                TextButton(
-                                    enabled = !annotationSaving,
-                                    onClick = {
-                                        annotationSaving = true
-                                        scope.launch {
-                                            val ok = container.cloudSync.setAnnotation(accountCode, annotationText.trim())
-                                            annotationSaving = false
-                                            snackbar.showSnackbar(if (ok) "标注已保存" else "保存失败")
+                                Spacer(Modifier.height(6.dp))
+                                Text(annotationText.ifBlank { "暂无标注 · 在资料页编辑" }, color = TextSecondary,
+                                    style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.clickable { detailSection = 3 }.padding(vertical = 8.dp))
+                                Spacer(Modifier.height(3.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            clipboard.setText(AnnotatedString(account.accountCode))
+                                            scope.launch { snackbar.showSnackbar("已复制 QQ 号") }
                                         }
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 4.dp)
-                                ) { Text(if (annotationSaving) "…" else "保存", color = Amber, style = MaterialTheme.typography.labelLarge) }
-                                TextButton(
-                                    enabled = !annotationSaving,
-                                    onClick = {
-                                        annotationText = ""
-                                        annotationSaving = true
-                                        scope.launch {
-                                            val ok = container.cloudSync.deleteAnnotation(accountCode)
-                                            annotationSaving = false
-                                            snackbar.showSnackbar(if (ok) "标注已删除" else "删除失败")
-                                        }
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 2.dp)
-                                ) { Text("删除", color = Rose, style = MaterialTheme.typography.labelLarge) }
-                            }
-                            Spacer(Modifier.height(3.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable {
-                                        clipboard.setText(AnnotatedString(account.accountCode))
-                                        scope.launch { snackbar.showSnackbar("已复制 QQ 号") }
-                                    }
-                            ) {
-                                Text(
-                                    "${loginTypeLabel(account.loginType)} · ${account.accountCode}",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                    color = TextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Icon(
-                                    Icons.Outlined.ContentCopy,
-                                    contentDescription = "复制 QQ 号",
-                                    tint = TextMuted,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                            if (remark != null || syncedGameName != null) {
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    "游戏名 · ${syncedGameName ?: account.gameNick ?: "—"}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextMuted,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Spacer(Modifier.height(7.dp))
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                InfoChip(account.deviceName ?: "未知设备", TextSecondary)
-                                InfoChip("游戏 ID ${account.gameId ?: "—"}", TextMuted)
-                                if (account.paused) InfoChip("暂停中", Amber)
-                            }
-                            if (account.paused) {
-                                val overdue = FacilityTimes.maxOverdue(account.facilities)
-                                if (overdue != null) {
-                                    Spacer(Modifier.height(5.dp))
+                                ) {
                                     Text(
-                                        "已超时 ${formatOverdue(overdue)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Rose
+                                        "${loginTypeLabel(account.loginType)} · ${account.accountCode}",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                        color = TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        Icons.Outlined.ContentCopy,
+                                        contentDescription = "复制 QQ 号",
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(12.dp)
                                     )
                                 }
+                                if (remark != null || syncedGameName != null) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        "游戏名 · ${syncedGameName ?: account.gameNick ?: "—"}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextMuted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(Modifier.height(7.dp))
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    InfoChip(account.deviceName ?: "未知设备", TextSecondary)
+                                    InfoChip("游戏 ID ${account.gameId ?: "—"}", TextMuted)
+                                    if (account.paused) InfoChip("暂停中", Amber)
+                                }
+                                if (account.paused) {
+                                    val overdue = FacilityTimes.maxOverdue(account.facilities)
+                                    if (overdue != null) {
+                                        Spacer(Modifier.height(5.dp))
+                                        Text(
+                                            "已超时 ${formatOverdue(overdue)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Rose
+                                        )
+                                    }
+                                }
                             }
-                        }
+                    }
                 }
             }
 
-            item(key = "credit") {
-                DashaCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("信用分", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                            Spacer(Modifier.height(3.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    credit?.score?.toString() ?: "未登记",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = if (credit?.score != null && credit.score < 350) Rose else TextPrimary
-                                )
-                                if (credit?.score != null && credit.score < 350) {
-                                    Spacer(Modifier.width(6.dp))
+            if (detailSection == 0) {
+                item(key = "credit") {
+                    DashaCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("信用分", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                Spacer(Modifier.height(3.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        "低分",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Rose,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(Rose.copy(alpha = 0.14f))
-                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                        credit?.score?.toString() ?: "未登记",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = if (credit?.score != null && credit.score < 350) Rose else TextPrimary
                                     )
+                                    if (credit?.score != null && credit.score < 350) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            "低分",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Rose,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Rose.copy(alpha = 0.14f))
+                                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
-                        }
-                        TextButton(
-                            onClick = {
-                                if (credit == null) {
-                                    android.webkit.CookieManager.getInstance().removeAllCookies(null)
-                                    android.webkit.CookieManager.getInstance().flush()
-                                }
-                                creditRescan = false
-                                showCredit = true
-                            }
-                        ) { Text(if (credit == null) "扫码登记" else "更新", color = Amber) }
-                        if (credit != null) {
                             TextButton(
                                 onClick = {
-                                    android.webkit.CookieManager.getInstance().removeAllCookies(null)
-                                    android.webkit.CookieManager.getInstance().flush()
-                                    creditRescan = true
+                                    if (credit == null) {
+                                        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                                        android.webkit.CookieManager.getInstance().flush()
+                                    }
+                                    creditRescan = false
                                     showCredit = true
                                 }
-                            ) { Text("重新扫码", color = TextMuted) }
-                        }
-                    }
-                }
-            }
-
-            item(key = "assets") {
-                DashaCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatBlock(
-                            value = account.totalAsset ?: "—",
-                            label = "总资产",
-                            modifier = Modifier.weight(1f),
-                            valueColor = Amber
-                        )
-                        StatBlock(
-                            value = formatHafCoinWan(account.hafCoin),
-                            label = "哈夫币",
-                            modifier = Modifier.weight(1f),
-                            valueColor = Mint
-                        )
-                        StatBlock(
-                            value = account.actionLevel ?: "—",
-                            label = "行动等级",
-                            modifier = Modifier.weight(1f),
-                            valueColor = Sky
-                        )
-                    }
-                    if (hafDelta != null) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "24h 峰值对比 $hafDelta",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (hafDelta.startsWith("+")) Mint else Rose
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    HorizontalDivider(color = Line)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "资产更新于 ${account.assetUpdatedAt ?: "—"}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted
-                    )
-                }
-            }
-
-            item(key = "haf-chart") {
-                DashaCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "哈夫币变化",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = TextPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        listOf(24L to "24小时", 72L to "3天", 168L to "7天").forEach { (h, label) ->
-                            TextButton(onClick = { hafRange = h }) {
-                                Text(
-                                    label,
-                                    color = if (hafRange == h) Mint else TextMuted,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
+                            ) { Text(if (credit == null) "扫码登记" else "更新", color = Amber) }
+                            if (credit != null) {
+                                TextButton(
+                                    onClick = {
+                                        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                                        android.webkit.CookieManager.getInstance().flush()
+                                        creditRescan = true
+                                        showCredit = true
+                                    }
+                                ) { Text("重新扫码", color = TextMuted) }
                             }
                         }
                     }
-                    val now = System.currentTimeMillis()
-                    val localPoints = container.hafHistory.points(accountCode, now - hafRange * 3600_000L)
-                    val points = (if (serverHafPoints.isNotEmpty()) serverHafPoints else localPoints).toMutableList()
-                    parseCompactNumber(account.hafCoin)?.let { cur ->
-                        if (points.isEmpty() || points.last().second != cur) points.add(now to cur)
-                    }
-                    val bucketMs = when (hafRange) {
-                        72L -> 4 * 3600_000L
-                        168L -> 8 * 3600_000L
-                        else -> 0L
-                    }
-                    val chartPoints = if (bucketMs <= 0) {
-                        val out = ArrayList<Pair<Long, Double>>()
-                        points.forEach { p ->
-                            if (out.isEmpty() || out.last().second != p.second) out.add(p)
+                }
+            }
+
+            if (detailSection == 0 || detailSection == 1) {
+                item(key = "assets") {
+                    DashaCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            StatBlock(
+                                value = account.totalAsset ?: "—",
+                                label = "总资产",
+                                modifier = Modifier.weight(1f),
+                                valueColor = Amber
+                            )
+                            StatBlock(
+                                value = formatHafCoinWan(account.hafCoin),
+                                label = "哈夫币",
+                                modifier = Modifier.weight(1f),
+                                valueColor = Mint
+                            )
+                            StatBlock(
+                                value = account.actionLevel ?: "—",
+                                label = "行动等级",
+                                modifier = Modifier.weight(1f),
+                                valueColor = Sky
+                            )
                         }
-                        out
-                    } else points
-                        .groupBy { it.first / bucketMs }
-                        .map { (bucket, group) ->
-                            val peak = group.maxBy { it.second }
-                            (bucket * bucketMs) to peak.second
+                        if (hafDelta != null) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "24h 峰值对比 $hafDelta",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (hafDelta.startsWith("+")) Mint else Rose
+                            )
                         }
-                        .sortedBy { it.first }
-                    if (chartPoints.size < 2) {
+                        Spacer(Modifier.height(8.dp))
+                        HorizontalDivider(color = Line)
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            "正在记录，至少需要两个时间点才能画图",
+                            "资产更新于 ${account.assetUpdatedAt ?: "—"}",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextMuted
                         )
-                    } else {
-                        val min = chartPoints.minOf { it.second }
-                        val max = chartPoints.maxOf { it.second }
-                        val lineColor = Line
-                        val mintColor = Mint
-                        Box(Modifier.fillMaxWidth().height(150.dp)) {
-                            Canvas(
-                                Modifier.fillMaxSize().onGloballyPositioned { hafChartWidth = it.size.width.toFloat() }.pointerInput(chartPoints) {
-                                    detectTapGestures(onPress = { off ->
-                                        val idx = ((off.x / size.width) * (chartPoints.size - 1))
-                                            .roundToInt().coerceIn(0, chartPoints.size - 1)
-                                        hafHoverIndex = idx
-                                        hafHoverX = size.width * idx / (chartPoints.size - 1).toFloat()
-                                    })
+                    }
+                }
+            }
+
+            if (detailSection == 1) {
+                item(key = "haf-chart") {
+                    DashaCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "哈夫币变化",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = TextPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            listOf(24L to "24小时", 72L to "3天", 168L to "7天").forEach { (h, label) ->
+                                TextButton(onClick = { hafRange = h }) {
+                                    Text(
+                                        label,
+                                        color = if (hafRange == h) Mint else TextMuted,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
                                 }
-                            ) {
-                                val w = size.width
-                                val h = size.height
-                                val top = 8.dp.toPx()
-                                val bottom = h - 8.dp.toPx()
-                                val range = (max - min).coerceAtLeast(1.0)
-                                for (i in 0..4) {
-                                    val y = top + (bottom - top) * i / 4f
-                                    drawLine(lineColor.copy(alpha = 0.35f), Offset(0f, y), Offset(w, y), 1f)
-                                }
-                                val path = Path()
-                                chartPoints.forEachIndexed { i, (_, v) ->
-                                    val x = if (chartPoints.size == 1) 0f else w * i / (chartPoints.size - 1).toFloat()
-                                    val y = bottom - ((v - min) / range * (bottom - top)).toFloat()
-                                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                                }
-                                drawPath(path, mintColor, style = Stroke(width = 2.dp.toPx()))
-                                chartPoints.forEachIndexed { i, (_, v) ->
-                                    val x = if (chartPoints.size == 1) 0f else w * i / (chartPoints.size - 1).toFloat()
-                                    val y = bottom - ((v - min) / range * (bottom - top)).toFloat()
-                                    drawCircle(mintColor.copy(alpha = 0.75f), 2.5.dp.toPx(), Offset(x, y))
+                            }
+                        }
+                        val now = System.currentTimeMillis()
+                        val localPoints = container.hafHistory.points(accountCode, now - hafRange * 3600_000L)
+                        val points = (if (serverHafPoints.isNotEmpty()) serverHafPoints else localPoints).toMutableList()
+                        parseCompactNumber(account.hafCoin)?.let { cur ->
+                            if (points.isEmpty() || points.last().second != cur) points.add(now to cur)
+                        }
+                        val bucketMs = when (hafRange) {
+                            72L -> 4 * 3600_000L
+                            168L -> 8 * 3600_000L
+                            else -> 0L
+                        }
+                        val chartPoints = if (bucketMs <= 0) {
+                            val out = ArrayList<Pair<Long, Double>>()
+                            points.forEach { p ->
+                                if (out.isEmpty() || out.last().second != p.second) out.add(p)
+                            }
+                            out
+                        } else points
+                            .groupBy { it.first / bucketMs }
+                            .map { (bucket, group) ->
+                                val peak = group.maxBy { it.second }
+                                (bucket * bucketMs) to peak.second
+                            }
+                            .sortedBy { it.first }
+                        if (chartPoints.size < 2) {
+                            Text(
+                                "正在记录，至少需要两个时间点才能画图",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted
+                            )
+                        } else {
+                            val min = chartPoints.minOf { it.second }
+                            val max = chartPoints.maxOf { it.second }
+                            val lineColor = Line
+                            val mintColor = Mint
+                            Box(Modifier.fillMaxWidth().height(150.dp)) {
+                                Canvas(
+                                    Modifier.fillMaxSize().onGloballyPositioned { hafChartWidth = it.size.width.toFloat() }.pointerInput(chartPoints) {
+                                        detectTapGestures(onPress = { off ->
+                                            val idx = ((off.x / size.width) * (chartPoints.size - 1))
+                                                .roundToInt().coerceIn(0, chartPoints.size - 1)
+                                            hafHoverIndex = idx
+                                            hafHoverX = size.width * idx / (chartPoints.size - 1).toFloat()
+                                        })
+                                    }
+                                ) {
+                                    val w = size.width
+                                    val h = size.height
+                                    val top = 8.dp.toPx()
+                                    val bottom = h - 8.dp.toPx()
+                                    val range = (max - min).coerceAtLeast(1.0)
+                                    for (i in 0..4) {
+                                        val y = top + (bottom - top) * i / 4f
+                                        drawLine(lineColor.copy(alpha = 0.35f), Offset(0f, y), Offset(w, y), 1f)
+                                    }
+                                    val path = Path()
+                                    chartPoints.forEachIndexed { i, (_, v) ->
+                                        val x = if (chartPoints.size == 1) 0f else w * i / (chartPoints.size - 1).toFloat()
+                                        val y = bottom - ((v - min) / range * (bottom - top)).toFloat()
+                                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                                    }
+                                    drawPath(path, mintColor, style = Stroke(width = 2.dp.toPx()))
+                                    chartPoints.forEachIndexed { i, (_, v) ->
+                                        val x = if (chartPoints.size == 1) 0f else w * i / (chartPoints.size - 1).toFloat()
+                                        val y = bottom - ((v - min) / range * (bottom - top)).toFloat()
+                                        drawCircle(mintColor.copy(alpha = 0.75f), 2.5.dp.toPx(), Offset(x, y))
+                                    }
+                                    hafHoverIndex?.let { idx ->
+                                        val hp = chartPoints.getOrNull(idx) ?: return@let
+                                        val x = w * idx / (chartPoints.size - 1).toFloat()
+                                        val y = bottom - ((hp.second - min) / range * (bottom - top)).toFloat()
+                                        drawLine(mintColor.copy(alpha = 0.4f), Offset(x, top), Offset(x, bottom), 1f)
+                                        drawCircle(mintColor, 4.dp.toPx(), Offset(x, y))
+                                    }
                                 }
                                 hafHoverIndex?.let { idx ->
                                     val hp = chartPoints.getOrNull(idx) ?: return@let
-                                    val x = w * idx / (chartPoints.size - 1).toFloat()
-                                    val y = bottom - ((hp.second - min) / range * (bottom - top)).toFloat()
-                                    drawLine(mintColor.copy(alpha = 0.4f), Offset(x, top), Offset(x, bottom), 1f)
-                                    drawCircle(mintColor, 4.dp.toPx(), Offset(x, y))
-                                }
-                            }
-                            hafHoverIndex?.let { idx ->
-                                val hp = chartPoints.getOrNull(idx) ?: return@let
-                                Surface(
-                                    modifier = Modifier
-                                        .align(if (hafHoverX > hafChartWidth / 2) Alignment.TopEnd else Alignment.TopStart)
-                                        .padding(2.dp),
-                                    color = Surface2,
-                                    shape = RoundedCornerShape(6.dp),
-                                    shadowElevation = 4.dp
-                                ) {
-                                    Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                                        Text(
-                                            formatWanAmount(hp.second),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = TextPrimary
-                                        )
-                                        Text(
-                                            java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(hp.first),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = TextMuted
-                                        )
+                                    Surface(
+                                        modifier = Modifier
+                                            .align(if (hafHoverX > hafChartWidth / 2) Alignment.TopEnd else Alignment.TopStart)
+                                            .padding(2.dp),
+                                        color = Surface2,
+                                        shape = RoundedCornerShape(6.dp),
+                                        shadowElevation = 4.dp
+                                    ) {
+                                        Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                                            Text(
+                                                formatWanAmount(hp.second),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = TextPrimary
+                                            )
+                                            Text(
+                                                java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(hp.first),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = TextMuted
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "最低 ${formatWanAmount(min)} · 最高 ${formatWanAmount(max)} · 当前 ${formatWanAmount(chartPoints.last().second)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
-                        )
-                    }
-                }
-            }
-
-            item(key = "stamina") {
-                DashaCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SectionTitle("体力 / 负重 / AW", modifier = Modifier.weight(1f))
-                        if (levels != null) {
+                            Spacer(Modifier.height(4.dp))
                             Text(
-                                "AI 识别 · ${formatTimestamp(levels.updatedAt)}",
+                                "最低 ${formatWanAmount(min)} · 最高 ${formatWanAmount(max)} · 当前 ${formatWanAmount(chartPoints.last().second)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextMuted
                             )
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Row {
-                        StatBlock(
-                            value = levels?.training?.let { "Lv$it" } ?: "—",
-                            label = "体力（训练中心）",
-                            modifier = Modifier.weight(1f),
-                            valueColor = Mint
-                        )
-                        StatBlock(
-                            value = levels?.range?.let { "Lv$it" } ?: "—",
-                            label = "负重（靶场）",
-                            modifier = Modifier.weight(1f),
-                            valueColor = Sky
-                        )
-                        StatBlock(
-                            value = levels?.awBullets?.let { "${it}发" } ?: "—",
-                            label = "AW 子弹",
-                            modifier = Modifier.weight(1f),
-                            valueColor = Amber
-                        )
-                    }
-                    if (levels == null) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "未登记：可在「连接设置 → 体力 / 负重 / AW（AI 识别）」里识别所有账号",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
-                        )
-                    }
                 }
             }
 
-            item(key = "actions") {
-                DashaCard {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        ActionTile(
-                            icon = if (account.paused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
-                            label = if (account.paused) "恢复" else "暂停",
-                            tint = if (account.paused) Mint else Amber,
-                            modifier = Modifier.weight(1f),
-                            onClick = { if (account.paused) vm.resume() else vm.pause() }
-                        )
-                        ActionTile(
-                            icon = Icons.Outlined.Build,
-                            label = "制造",
-                            tint = Sky,
-                            modifier = Modifier.weight(1f),
-                            onClick = { vm.runProduction() }
-                        )
-                        ActionTile(
-                            icon = Icons.Outlined.Sell,
-                            label = "出售",
-                            tint = Rose,
-                            modifier = Modifier.weight(1f),
-                            onClick = { showSellDialog = true }
-                        )
-                        ActionTile(
-                            icon = Icons.Outlined.Schedule,
-                            label = "定时暂停",
-                            tint = TextSecondary,
-                            modifier = Modifier.weight(1f),
-                            onClick = { showScheduleDialog = true }
-                        )
-                    }
-                }
-            }
-
-            item(key = "qrlogin-card") {
-                val ctx = androidx.compose.ui.platform.LocalContext.current
-                val cs = androidx.compose.runtime.remember {
-                    com.dashabi.control.data.CloudSync(ctx, container.stamina, container.credit, container.gameNames)
-                }
-                var busy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-                var canceled by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-                var msg by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf<String?>(null)
-                }
-                val picker = androidx.activity.compose.rememberLauncherForActivityResult(
-                    androidx.activity.result.contract.ActivityResultContracts.GetContent()
-                ) { uri ->
-                    if (uri != null) {
-                        busy = true
-                        scope.launch {
-                            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                runCatching {
-                                    ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                }.getOrNull()
+            if (detailSection == 0) {
+                item(key = "stamina") {
+                    DashaCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SectionTitle("体力 / 负重 / AW", modifier = Modifier.weight(1f))
+                            if (levels != null) {
+                                Text(
+                                    "AI 识别 · ${formatTimestamp(levels.updatedAt)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
                             }
-                            val url = bytes?.let { cs.uploadQr(it) }
-                            // 先看设备原状态：运行中才停脚本，定时开着才关，结束要按原样恢复
-                            // /devices/{code} 的 timer_enabled 经常是 null，必须读 /status 实时状态
-                            val devBefore = (container.repo.deviceLive(deviceCode) as? com.dashabi.control.data.ApiResult.Ok)?.value?.status
-                            val wasRunning = devBefore?.running == true
-                            val wasTimer = devBefore?.timerEnabled == true
-                            if (wasRunning) runCatching {
-                                container.repo.stop(deviceCode, disableTimer = false)
-                            }
-                            if (wasTimer) runCatching { container.repo.timerDisable(deviceCode) }
-                            val target = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode)
-                            val sentId = if (url != null && !target.isNullOrBlank()) {
-                                cs.sendQrLogin(target, accountCode, url)
-                            } else null
-                            val sent = sentId != null
-                            msg = when {
-                                bytes == null -> "读取图片失败"
-                                url == null -> "上传失败"
-                                target.isNullOrBlank() -> "这台设备还没绑定云控助手"
-                                sent -> "扫码指令已下发，等待结果…"
-                                else -> "下发失败"
-                            }
-                            // 轮询云控助手回报的结果（最多 90 秒）
-                            if (sent && !target.isNullOrBlank() && sentId != null) {
-                                val started = System.currentTimeMillis()
-                                val since = 0L
-                                while (System.currentTimeMillis() - started < 120_000 && !canceled) {
-                                    kotlinx.coroutines.delay(2500)
-                                    val st = cs.qrStatus(target, sentId, since)
-                                    if (st != null) {
-                                        msg = st
-                                        if (st.startsWith("✅")) {
-                                            // 登录成功后自动暂停当前账号，避免马上继续跑任务
-                                            msg = st + "，已自动暂停该账号"
-                                            vm.pause()
-                                        }
-                                        if (st.startsWith("✅") || st.startsWith("❌")) break
-                                    }
-                                }
-                            }
-                            // 恢复到开始前的状态
-                            if (wasTimer) runCatching { container.repo.timerEnable(deviceCode) }
-                            // 界面关掉也不影响：110 秒后再兜底开一次
-                            if (wasTimer) {
-                                com.dashabi.control.DashaApp.timerRestoreScope.launch {
-                                    kotlinx.coroutines.delay(110_000)
-                                    runCatching { container.repo.timerEnable(deviceCode) }
-                                }
-                            }
-                            busy = false
                         }
-                    }
-                }
-                DashaCard(accent = Sky) {
-                    Column(Modifier.fillMaxWidth()) {
-                        Text(
-                            "扫码登录",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = TextPrimary
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "上传 QQ 登录二维码，云控助手会切到该账号并扫码登录",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "确保图片里只有一个二维码！！！",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Rose
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        androidx.compose.material3.OutlinedButton(
-                            enabled = !busy,
-                            onClick = { picker.launch("image/*") },
-                            shape = RoundedCornerShape(12.dp)
-                        ) { Text(if (busy) "处理中…" else "上传二维码并扫码") }
-                        if (busy) {
-                            Spacer(Modifier.width(8.dp))
-                            androidx.compose.material3.OutlinedButton(
-                                onClick = {
-                                    canceled = true
-                                    msg = "已停止"
-                                    com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode)?.let { assistant ->
-                                        scope.launch { cs.cancelQr(assistant) }
-                                    }
-                                },
-                                shape = RoundedCornerShape(12.dp)
-                            ) { Text("停止") }
+                        Spacer(Modifier.height(10.dp))
+                        Row {
+                            StatBlock(
+                                value = levels?.training?.let { "Lv$it" } ?: "—",
+                                label = "体力（训练中心）",
+                                modifier = Modifier.weight(1f),
+                                valueColor = Mint
+                            )
+                            StatBlock(
+                                value = levels?.range?.let { "Lv$it" } ?: "—",
+                                label = "负重（靶场）",
+                                modifier = Modifier.weight(1f),
+                                valueColor = Sky
+                            )
+                            StatBlock(
+                                value = levels?.awBullets?.let { "${it}发" } ?: "—",
+                                label = "AW 子弹",
+                                modifier = Modifier.weight(1f),
+                                valueColor = Amber
+                            )
                         }
-                        msg?.let {
+                        if (levels == null) {
                             Spacer(Modifier.height(6.dp))
-                            Text(it, style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                            Text(
+                                "未登记：可在「连接设置 → 体力 / 负重 / AW（AI 识别）」里识别所有账号",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted
+                            )
                         }
                     }
                 }
-                StatsQueryCard(container = container, account = account, deviceCode = deviceCode)
-
             }
 
-            item(key = "facilities") {
-                DashaCard {
-                    SectionTitle("设施进度")
-                    Spacer(Modifier.height(8.dp))
-                    FacilityRows(account.facilities)
+            if (detailSection == 2) {
+                item(key = "actions") {
+                    com.dashabi.control.ui.components.AccountOperationsPanel(
+                        paused = account.paused, busyAction = vm.busyAction,
+                        onTogglePause = { if (account.paused) vm.resume() else vm.pause() },
+                        onProduction = { vm.runProduction() },
+                        onSell = { showSellDialog = true },
+                        onSchedule = { showScheduleDialog = true }
+                    )
                 }
             }
 
-            item(key = "images") {
-                DashaCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SectionTitle("账号截图", modifier = Modifier.weight(1f))
-                        Text(
-                            "images",
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                            color = TextMuted
-                        )
+            if (detailSection == 2) {
+                item(key = "qrlogin-card") {
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    val cs = androidx.compose.runtime.remember {
+                        com.dashabi.control.data.CloudSync(ctx, container.stamina, container.credit, container.gameNames)
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PreviewTile(
-                            title = "个人信息",
-                            info = vm.images?.profile,
-                            url = previewUrl("profile"),
-                            modifier = Modifier.weight(1f),
-                            onOpen = {
-                                previewUrl("profile")?.let {
-                                    preview = PreviewImage("个人信息", it, vm.images?.profile?.capturedAt)
-                                }
-                            }
-                        )
-                        PreviewTile(
-                            title = "特勤处",
-                            info = vm.images?.tqc,
-                            url = previewUrl("tqc"),
-                            modifier = Modifier.weight(1f),
-                            onOpen = {
-                                previewUrl("tqc")?.let {
-                                    preview = PreviewImage("特勤处", it, vm.images?.tqc?.capturedAt)
-                                }
-                            }
-                        )
-                        PreviewTile(
-                            title = "仓库",
-                            info = vm.images?.store,
-                            url = previewUrl("store"),
-                            modifier = Modifier.weight(1f),
-                            onOpen = {
-                                previewUrl("store")?.let {
-                                    preview = PreviewImage("仓库", it, vm.images?.store?.capturedAt)
-                                }
-                            }
-                        )
+                    var busy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    var canceled by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    var msg by androidx.compose.runtime.remember {
+                        androidx.compose.runtime.mutableStateOf<String?>(null)
                     }
-                }
-            }
-
-            item(key = "meta") {
-                DashaCard {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { metaExpanded = !metaExpanded },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        SectionTitle("接口字段", modifier = Modifier.weight(1f))
-                        Text(
-                            if (metaExpanded) "收起" else "展开",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Amber
-                        )
-                        Spacer(Modifier.width(2.dp))
-                        Icon(
-                            imageVector = if (metaExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                            contentDescription = if (metaExpanded) "收起接口字段" else "展开接口字段",
-                            tint = Amber,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+                    ) { uri ->
+                        if (uri != null) {
+                            busy = true
+                            scope.launch {
+                                val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    runCatching {
+                                        ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                    }.getOrNull()
+                                }
+                                val url = bytes?.let { cs.uploadQr(it) }
+                                // 先看设备原状态：运行中才停脚本，定时开着才关，结束要按原样恢复
+                                // /devices/{code} 的 timer_enabled 经常是 null，必须读 /status 实时状态
+                                val devBefore = (container.repo.deviceLive(deviceCode) as? com.dashabi.control.data.ApiResult.Ok)?.value?.status
+                                val wasRunning = devBefore?.running == true
+                                val wasTimer = devBefore?.timerEnabled == true
+                                if (wasRunning) runCatching {
+                                    container.repo.stop(deviceCode, disableTimer = false)
+                                }
+                                if (wasTimer) runCatching { container.repo.timerDisable(deviceCode) }
+                                val target = com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode)
+                                val sentId = if (url != null && !target.isNullOrBlank()) {
+                                    cs.sendQrLogin(target, accountCode, url)
+                                } else null
+                                val sent = sentId != null
+                                msg = when {
+                                    bytes == null -> "读取图片失败"
+                                    url == null -> "上传失败"
+                                    target.isNullOrBlank() -> "这台设备还没绑定云控助手"
+                                    sent -> "扫码指令已下发，等待结果…"
+                                    else -> "下发失败"
+                                }
+                                // 轮询云控助手回报的结果（最多 90 秒）
+                                if (sent && !target.isNullOrBlank() && sentId != null) {
+                                    val started = System.currentTimeMillis()
+                                    val since = 0L
+                                    while (System.currentTimeMillis() - started < 120_000 && !canceled) {
+                                        kotlinx.coroutines.delay(2500)
+                                        val st = cs.qrStatus(target, sentId, since)
+                                        if (st != null) {
+                                            msg = st
+                                            if (st.startsWith("✅")) {
+                                                // 登录成功后自动暂停当前账号，避免马上继续跑任务
+                                                msg = st + "，已自动暂停该账号"
+                                                vm.pause()
+                                            }
+                                            if (st.startsWith("✅") || st.startsWith("❌")) break
+                                        }
+                                    }
+                                }
+                                // 恢复到开始前的状态
+                                if (wasTimer) runCatching { container.repo.timerEnable(deviceCode) }
+                                // 界面关掉也不影响：110 秒后再兜底开一次
+                                if (wasTimer) {
+                                    com.dashabi.control.DashaApp.timerRestoreScope.launch {
+                                        kotlinx.coroutines.delay(110_000)
+                                        runCatching { container.repo.timerEnable(deviceCode) }
+                                    }
+                                }
+                                busy = false
+                            }
+                        }
                     }
-                    AnimatedVisibility(visible = metaExpanded) {
-                        Column {
+                    DashaCard(accent = Sky) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(
+                                "扫码登录",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = TextPrimary
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "上传 QQ 登录二维码，云控助手会切到该账号并扫码登录",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "确保图片里只有一个二维码！！！",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Rose
+                            )
                             Spacer(Modifier.height(8.dp))
-                            KeyValueRow("account_code", account.accountCode, mono = true)
-                            KeyValueRow("device_code", account.deviceCode, mono = true)
-                            KeyValueRow("game_id", account.gameId, mono = true)
-                            KeyValueRow("game_nick", account.gameNick)
-                            KeyValueRow("status", account.status, mono = true)
-                            KeyValueRow("raw_status", account.rawStatus)
-                            KeyValueRow("paused", account.paused.toString(), mono = true)
-                            KeyValueRow("login_type", account.loginType, mono = true)
+                            androidx.compose.material3.OutlinedButton(
+                                enabled = !busy,
+                                onClick = { picker.launch("image/*") },
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text(if (busy) "处理中…" else "上传二维码并扫码") }
+                            if (busy) {
+                                Spacer(Modifier.width(8.dp))
+                                androidx.compose.material3.OutlinedButton(
+                                    onClick = {
+                                        canceled = true
+                                        msg = "已停止"
+                                        com.dashabi.control.remote.RebootBindStore.get(ctx, deviceCode)?.let { assistant ->
+                                            scope.launch { cs.cancelQr(assistant) }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(12.dp)
+                                ) { Text("停止") }
+                            }
+                            msg?.let {
+                                Spacer(Modifier.height(6.dp))
+                                Text(it, style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                            }
+                        }
+                    }
+                    StatsQueryCard(container = container, account = account, deviceCode = deviceCode)
+
+                }
+            }
+
+            if (detailSection == 1) {
+                item(key = "facilities") {
+                    DashaCard {
+                        SectionTitle("设施进度")
+                        Spacer(Modifier.height(8.dp))
+                        FacilityRows(account.facilities)
+                    }
+                }
+            }
+
+            if (detailSection == 3) {
+                item(key = "images") {
+                    DashaCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SectionTitle("账号截图", modifier = Modifier.weight(1f))
+                            Text(
+                                "images",
+                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                                color = TextMuted
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PreviewTile(
+                                title = "个人信息",
+                                info = vm.images?.profile,
+                                url = previewUrl("profile"),
+                                modifier = Modifier.weight(1f),
+                                onOpen = {
+                                    previewUrl("profile")?.let {
+                                        preview = PreviewImage("个人信息", it, vm.images?.profile?.capturedAt)
+                                    }
+                                }
+                            )
+                            PreviewTile(
+                                title = "特勤处",
+                                info = vm.images?.tqc,
+                                url = previewUrl("tqc"),
+                                modifier = Modifier.weight(1f),
+                                onOpen = {
+                                    previewUrl("tqc")?.let {
+                                        preview = PreviewImage("特勤处", it, vm.images?.tqc?.capturedAt)
+                                    }
+                                }
+                            )
+                            PreviewTile(
+                                title = "仓库",
+                                info = vm.images?.store,
+                                url = previewUrl("store"),
+                                modifier = Modifier.weight(1f),
+                                onOpen = {
+                                    previewUrl("store")?.let {
+                                        preview = PreviewImage("仓库", it, vm.images?.store?.capturedAt)
+                                    }
+                                }
+                            )
                         }
                     }
                 }
             }
 
-            item(key = "notes") {
-                DashaCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SectionTitle("备注", modifier = Modifier.weight(1f))
-                        TextButton(onClick = { showNoteDialog = true }) {
+            if (detailSection == 3) {
+                item(key = "annotation") {
+                    DashaCard {
+                        Text("账号标注", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(value = annotationText, onValueChange = { annotationText = it.take(500) },
+                            modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 5,
+                            placeholder = { Text("记录账号用途、跟进事项或备注") }, shape = RoundedCornerShape(12.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = !annotationSaving, modifier = Modifier.weight(1f), onClick = {
+                                annotationSaving = true
+                                scope.launch {
+                                    val ok = runCatching { container.cloudSync.deleteAnnotation(accountCode) }.getOrDefault(false)
+                                    if (ok) annotationText = ""
+                                    annotationSaving = false
+                                    snackbar.showSnackbar(if (ok) "标注已删除" else "删除失败")
+                                }
+                            }) { Text("删除标注", color = Rose) }
+                            Button(enabled = !annotationSaving, modifier = Modifier.weight(1f), onClick = {
+                                annotationSaving = true
+                                scope.launch {
+                                    val ok = runCatching { container.cloudSync.setAnnotation(accountCode, annotationText.trim()) }.getOrDefault(false)
+                                    annotationSaving = false
+                                    snackbar.showSnackbar(if (ok) "标注已保存" else "保存失败")
+                                }
+                            }) { Text(if (annotationSaving) "处理中…" else "保存标注") }
+                        }
+                    }
+                }
+            }
+
+            if (detailSection == 3) {
+                item(key = "meta") {
+                    DashaCard {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { metaExpanded = !metaExpanded },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SectionTitle("接口字段", modifier = Modifier.weight(1f))
+                            Text(
+                                if (metaExpanded) "收起" else "展开",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Amber
+                            )
+                            Spacer(Modifier.width(2.dp))
                             Icon(
-                                Icons.Outlined.Edit,
-                                contentDescription = null,
+                                imageVector = if (metaExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                contentDescription = if (metaExpanded) "收起接口字段" else "展开接口字段",
                                 tint = Amber,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(Modifier.width(4.dp))
-                            Text("编辑", color = Amber, style = MaterialTheme.typography.labelMedium)
+                        }
+                        AnimatedVisibility(visible = metaExpanded) {
+                            Column {
+                                Spacer(Modifier.height(8.dp))
+                                KeyValueRow("account_code", account.accountCode, mono = true)
+                                KeyValueRow("device_code", account.deviceCode, mono = true)
+                                KeyValueRow("game_id", account.gameId, mono = true)
+                                KeyValueRow("game_nick", account.gameNick)
+                                KeyValueRow("status", account.status, mono = true)
+                                KeyValueRow("raw_status", account.rawStatus)
+                                KeyValueRow("paused", account.paused.toString(), mono = true)
+                                KeyValueRow("login_type", account.loginType, mono = true)
+                            }
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    KeyValueRow("备注", account.upstreamRemark, valueColor = TextSecondary)
-                    KeyValueRow("网站备注", account.websiteNote, valueColor = Amber)
                 }
             }
 
-            item(key = "schedules") {
-                DashaCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SectionTitle("定时暂停", modifier = Modifier.weight(1f))
-                        TextButton(onClick = { showScheduleDialog = true }) {
-                            Text("+ 新建", color = Amber, style = MaterialTheme.typography.labelMedium)
+            if (detailSection == 3) {
+                item(key = "notes") {
+                    DashaCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SectionTitle("备注", modifier = Modifier.weight(1f))
+                            TextButton(onClick = { showNoteDialog = true }) {
+                                Icon(
+                                    Icons.Outlined.Edit,
+                                    contentDescription = null,
+                                    tint = Amber,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("编辑", color = Amber, style = MaterialTheme.typography.labelMedium)
+                            }
                         }
+                        Spacer(Modifier.height(4.dp))
+                        KeyValueRow("备注", account.upstreamRemark, valueColor = TextSecondary)
+                        KeyValueRow("网站备注", account.websiteNote, valueColor = Amber)
                     }
-                    Spacer(Modifier.height(6.dp))
-                    if (vm.schedules.isEmpty()) {
-                        Text(
-                            "当前账号没有定时暂停计划",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted
-                        )
-                    } else {
-                        vm.schedules.forEach { schedule ->
-                            ScheduleRow(
-                                schedule = schedule,
-                                onCancel = {
-                                    val id = (schedule["id"] as? JsonPrimitive)?.longOrNull
-                                    if (id != null) pendingCancelId = id
-                                }
+                }
+            }
+
+            if (detailSection == 2) {
+                item(key = "schedules") {
+                    DashaCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SectionTitle("定时暂停", modifier = Modifier.weight(1f))
+                            TextButton(onClick = { showScheduleDialog = true }) {
+                                Text("+ 新建", color = Amber, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        if (vm.schedules.isEmpty()) {
+                            Text(
+                                "当前账号没有定时暂停计划",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
                             )
-                            Spacer(Modifier.height(8.dp))
+                        } else {
+                            vm.schedules.forEach { schedule ->
+                                ScheduleRow(
+                                    schedule = schedule,
+                                    onCancel = {
+                                        val id = (schedule["id"] as? JsonPrimitive)?.longOrNull
+                                        if (id != null) pendingCancelId = id
+                                    }
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
                         }
                     }
                 }
@@ -1016,35 +1028,6 @@ fun AccountDetailScreen(
 /* ------------------------------------------------------------------ */
 /*  子组件                                                              */
 /* ------------------------------------------------------------------ */
-
-@Composable
-private fun ActionTile(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    tint: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(tint.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
-        }
-        Spacer(Modifier.height(5.dp))
-        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-    }
-}
 
 private val facilityLabels = listOf(
     "tech" to "技术中心",
@@ -1246,7 +1229,7 @@ private fun ImagePreviewDialog(image: PreviewImage, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun NoteDialog(initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+internal fun NoteDialog(initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1255,7 +1238,7 @@ private fun NoteDialog(initial: String, onDismiss: () -> Unit, onSave: (String) 
         textContentColor = TextSecondary,
         title = { Text("修改网站备注", style = MaterialTheme.typography.titleMedium) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     "备注只写入网站本地，不会同步到云控软件。最多 200 字。",
                     style = MaterialTheme.typography.bodySmall,
@@ -1303,7 +1286,7 @@ private fun NoteDialog(initial: String, onDismiss: () -> Unit, onSave: (String) 
 }
 
 @Composable
-private fun ScheduleDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
+internal fun ScheduleDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
     val formatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss") }
     val now = remember { LocalDateTime.now() }
     var start by remember {
@@ -1313,6 +1296,16 @@ private fun ScheduleDialog(onDismiss: () -> Unit, onCreate: (String, String) -> 
         mutableStateOf(now.plusDays(1).withHour(6).withMinute(0).withSecond(0).format(formatter))
     }
     var error by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    fun chooseTime(value: String, onValue: (String) -> Unit) {
+        val selected = runCatching { LocalDateTime.parse(value, formatter) }.getOrDefault(LocalDateTime.now())
+        android.app.DatePickerDialog(context, { _, year, month, day ->
+            android.app.TimePickerDialog(context, { _, hour, minute ->
+                onValue(LocalDateTime.of(year, month + 1, day, hour, minute, 0).format(formatter))
+                error = null
+            }, selected.hour, selected.minute, true).show()
+        }, selected.year, selected.monthValue - 1, selected.dayOfMonth).show()
+    }
 
     fun validate(): Boolean {
         val s = runCatching { LocalDateTime.parse(start, formatter) }.getOrNull()
@@ -1336,7 +1329,7 @@ private fun ScheduleDialog(onDismiss: () -> Unit, onCreate: (String, String) -> 
         textContentColor = TextSecondary,
         title = { Text("新建定时暂停", style = MaterialTheme.typography.titleMedium) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     "在指定时间区间内自动暂停账号，到点后由云控恢复。",
                     style = MaterialTheme.typography.bodySmall,
@@ -1345,7 +1338,8 @@ private fun ScheduleDialog(onDismiss: () -> Unit, onCreate: (String, String) -> 
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = start,
-                    onValueChange = { start = it },
+                    onValueChange = { start = it; error = null },
+                    trailingIcon = { IconButton(onClick = { chooseTime(start) { start = it } }) { Icon(Icons.Outlined.Schedule, "选择开始时间") } },
                     label = { Text("开始时间") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -1363,7 +1357,8 @@ private fun ScheduleDialog(onDismiss: () -> Unit, onCreate: (String, String) -> 
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = end,
-                    onValueChange = { end = it },
+                    onValueChange = { end = it; error = null },
+                    trailingIcon = { IconButton(onClick = { chooseTime(end) { end = it } }) { Icon(Icons.Outlined.Schedule, "选择结束时间") } },
                     label = { Text("结束时间") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),

@@ -29,7 +29,7 @@ import com.dashabi.control.ui.screens.AccountsScreen
 import com.dashabi.control.ui.screens.DeviceDetailScreen
 import com.dashabi.control.ui.screens.DevicesScreen
 import com.dashabi.control.ui.screens.RecognitionDialog
-import com.dashabi.control.ui.screens.SettingsSheet
+import com.dashabi.control.ui.screens.SettingsScreen
 import com.dashabi.control.ui.vm.AbnormalViewModel
 import com.dashabi.control.ui.vm.AutoSellViewModel
 import com.dashabi.control.ui.vm.DevicesViewModel
@@ -54,15 +54,12 @@ fun DashaRoot(initialTab: Int = 0, tabRequest: Int = 0) {
     val nav = rememberNavController()
     val settings by container.settings.state.collectAsState()
 
-    // 未内置 Key 的安装包首次启动直接弹出设置面板
-    var showSettings by rememberSaveable { mutableStateOf(settings.apiKey.isBlank()) }
     var settingsVersion by remember { mutableIntStateOf(0) }
     var tab by rememberSaveable { mutableIntStateOf(initialTab) }
 
     // 点击异常通知：回到主界面并切到「异常」页
     LaunchedEffect(tabRequest) {
         if (tabRequest > 0) {
-            showSettings = false
             nav.popBackStack(Routes.MAIN, inclusive = false)
             tab = initialTab
         }
@@ -138,7 +135,7 @@ fun DashaRoot(initialTab: Int = 0, tabRequest: Int = 0) {
                             abnormalCount = abnormalVm.items.size,
                             deviceAbnormalCount = devicesVm.abnormalCount,
                             onOpenDevice = { code -> nav.navigate(Routes.device(code)) },
-                            onOpenSettings = { showSettings = true },
+                            onOpenSettings = { tab = 3 },
                             onSelectTab = { tab = it }
                         )
 
@@ -152,8 +149,18 @@ fun DashaRoot(initialTab: Int = 0, tabRequest: Int = 0) {
                                     nav.navigate(Routes.account(device, account.accountCode))
                                 }
                             },
-                            onOpenSettings = { showSettings = true },
+                            onOpenSettings = { tab = 3 },
                             onSelectTab = { tab = it }
+                        )
+
+                        3 -> SettingsScreen(
+                            container = container,
+                            onDismiss = { tab = 0 },
+                            onSaved = { settingsVersion++ },
+                            onStartRecognition = { onlyMissing, mode -> recognitionVm.start(onlyMissing, mode) },
+                            onSelectTab = { tab = it },
+                            abnormalCount = abnormalVm.items.size,
+                            deviceAbnormalCount = devicesVm.abnormalCount
                         )
 
                         else -> AccountsScreen(
@@ -166,7 +173,7 @@ fun DashaRoot(initialTab: Int = 0, tabRequest: Int = 0) {
                                     nav.navigate(Routes.account(device, account.accountCode))
                                 }
                             },
-                            onOpenSettings = { showSettings = true },
+                            onOpenSettings = { tab = 3 },
                             onSelectTab = { tab = it }
                         )
                     }
@@ -201,21 +208,6 @@ fun DashaRoot(initialTab: Int = 0, tabRequest: Int = 0) {
                     onBack = { nav.popBackStack() }
                 )
             }
-        }
-
-        if (showSettings) {
-            SettingsSheet(
-                container = container,
-                onDismiss = { showSettings = false },
-                onSaved = {
-                    showSettings = false
-                    settingsVersion++
-                },
-                onStartRecognition = { onlyMissing, mode ->
-                    showSettings = false
-                    recognitionVm.start(onlyMissing, mode)
-                }
-            )
         }
 
         if (recognitionVm.running || recognitionVm.finished) {

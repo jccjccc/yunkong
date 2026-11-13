@@ -41,38 +41,38 @@ data class DashaPalette(
 )
 
 val DarkPalette = DashaPalette(
-    ink = Color(0xFF0A0D11),
-    surface1 = Color(0xFF11161C),
-    surface2 = Color(0xFF171F27),
-    surface3 = Color(0xFF202A35),
-    line = Color(0xFF25303D),
-    amber = Color(0xFFF2A93B),
-    mint = Color(0xFF3FD9A0),
-    sky = Color(0xFF5B9DFF),
-    rose = Color(0xFFFF6B6B),
-    violet = Color(0xFFB48CFF),
-    textPrimary = Color(0xFFE8EEF6),
-    textSecondary = Color(0xFF98A6B8),
-    textMuted = Color(0xFF6A7A8E),
-    heroStart = Color(0xFF1C2632),
-    onAccent = Color(0xFF171005)
+    ink = Color(0xFF11171D),
+    surface1 = Color(0xFF1A222B),
+    surface2 = Color(0xFF202B35),
+    surface3 = Color(0xFF2A3641),
+    line = Color(0xFF3A4753),
+    amber = Color(0xFF7EDBC5),
+    mint = Color(0xFF7EDBC5),
+    sky = Color(0xFF9DBCD7),
+    rose = Color(0xFFF09B91),
+    violet = Color(0xFFB7BACB),
+    textPrimary = Color(0xFFEDF2F7),
+    textSecondary = Color(0xFFBAC6D1),
+    textMuted = Color(0xFF91A2B2),
+    heroStart = Color(0xFF1D3437),
+    onAccent = Color(0xFF102A25)
 )
 
 val LightPalette = DashaPalette(
-    ink = Color(0xFFF3F5F9),
+    ink = Color(0xFFF4F6F8),
     surface1 = Color(0xFFFFFFFF),
-    surface2 = Color(0xFFF7F9FC),
-    surface3 = Color(0xFFEEF2F7),
-    line = Color(0xFFDCE3EC),
-    amber = Color(0xFFB26A00),
-    mint = Color(0xFF0B8F66),
-    sky = Color(0xFF1F6FEB),
-    rose = Color(0xFFD63C3C),
-    violet = Color(0xFF7A4DD6),
-    textPrimary = Color(0xFF10161E),
-    textSecondary = Color(0xFF4C5868),
-    textMuted = Color(0xFF7C8898),
-    heroStart = Color(0xFFF4F8FD),
+    surface2 = Color(0xFFF5F7F9),
+    surface3 = Color(0xFFEBF0F4),
+    line = Color(0xFFDCE3E9),
+    amber = Color(0xFF126D60),
+    mint = Color(0xFF126D60),
+    sky = Color(0xFF45687D),
+    rose = Color(0xFFB34238),
+    violet = Color(0xFF666780),
+    textPrimary = Color(0xFF192632),
+    textSecondary = Color(0xFF506273),
+    textMuted = Color(0xFF627487),
+    heroStart = Color(0xFFE6F3EF),
     onAccent = Color(0xFFFFFFFF)
 )
 
@@ -143,13 +143,13 @@ val TextMuted: Color
     @ReadOnlyComposable
     get() = LocalDashaPalette.current.textMuted
 
-/** 设备页顶部渐变卡的起始色。 */
+/** 设备页顶部概览的强调底色。 */
 val HeroStart: Color
     @Composable
     @ReadOnlyComposable
     get() = LocalDashaPalette.current.heroStart
 
-/** 琥珀色按钮上的文字/图标颜色。 */
+/** 主色按钮上的文字/图标颜色。 */
 val OnAccent: Color
     @Composable
     @ReadOnlyComposable
@@ -158,8 +158,8 @@ val OnAccent: Color
 private val DarkScheme = darkColorScheme(
     primary = DarkPalette.amber,
     onPrimary = DarkPalette.onAccent,
-    primaryContainer = Color(0xFF3B2A10),
-    onPrimaryContainer = Color(0xFFFFD9A0),
+    primaryContainer = Color(0xFF234D46),
+    onPrimaryContainer = Color(0xFFC3EDD8),
     secondary = DarkPalette.mint,
     onSecondary = Color(0xFF04150F),
     secondaryContainer = Color(0xFF103024),
@@ -176,7 +176,7 @@ private val DarkScheme = darkColorScheme(
     onSurfaceVariant = DarkPalette.textSecondary,
     surfaceTint = DarkPalette.amber,
     outline = DarkPalette.line,
-    outlineVariant = Color(0xFF1C2632),
+    outlineVariant = Color(0xFF1D3437),
     error = DarkPalette.rose,
     onError = Color(0xFF1B0505),
     errorContainer = Color(0xFF3A1414),
@@ -187,8 +187,8 @@ private val DarkScheme = darkColorScheme(
 private val LightScheme = lightColorScheme(
     primary = LightPalette.amber,
     onPrimary = LightPalette.onAccent,
-    primaryContainer = Color(0xFFFFE2B8),
-    onPrimaryContainer = Color(0xFF3A2200),
+    primaryContainer = Color(0xFFD8EDDF),
+    onPrimaryContainer = Color(0xFF193B28),
     secondary = LightPalette.mint,
     onSecondary = Color.White,
     secondaryContainer = Color(0xFFC9F5E4),
@@ -205,7 +205,7 @@ private val LightScheme = lightColorScheme(
     onSurfaceVariant = LightPalette.textSecondary,
     surfaceTint = LightPalette.amber,
     outline = LightPalette.line,
-    outlineVariant = Color(0xFFE7EDF4),
+    outlineVariant = Color(0xFFE5EAF0),
     error = LightPalette.rose,
     onError = Color.White,
     errorContainer = Color(0xFFFFDAD6),
@@ -214,11 +214,14 @@ private val LightScheme = lightColorScheme(
 )
 
 private val DashaTypography = Typography(
+    headlineLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 36.sp, lineHeight = 42.sp, letterSpacing = (-0.8).sp, fontFeatureSettings = "tnum"),
+    headlineMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 30.sp, lineHeight = 36.sp, letterSpacing = (-0.5).sp, fontFeatureSettings = "tnum"),
+    headlineSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 30.sp, fontFeatureSettings = "tnum"),
     titleLarge = TextStyle(
         fontWeight = FontWeight.SemiBold,
-        fontSize = 20.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.2.sp
+        fontSize = 22.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.5).sp
     ),
     titleMedium = TextStyle(
         fontWeight = FontWeight.SemiBold,
@@ -234,8 +237,8 @@ private val DashaTypography = Typography(
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
     bodySmall = TextStyle(fontSize = 12.sp, lineHeight = 17.sp),
     labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.1.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 0.2.sp),
-    labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.3.sp)
+    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, letterSpacing = 0.sp),
+    labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 0.sp)
 )
 
 private val DashaShapes = Shapes(

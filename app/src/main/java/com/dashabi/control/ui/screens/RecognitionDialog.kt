@@ -1,127 +1,88 @@
-﻿package com.dashabi.control.ui.screens
+package com.dashabi.control.ui.screens
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.dashabi.control.ui.theme.Amber
-import com.dashabi.control.ui.theme.Rose
-import com.dashabi.control.ui.theme.Surface3
-import com.dashabi.control.ui.theme.Surface2
-import com.dashabi.control.ui.theme.TextMuted
-import com.dashabi.control.ui.theme.TextPrimary
-import com.dashabi.control.ui.theme.TextSecondary
+import com.dashabi.control.ui.components.OperationFeedback
+import com.dashabi.control.ui.theme.*
 import com.dashabi.control.ui.vm.RecognizeMode
 import com.dashabi.control.ui.vm.RecognitionViewModel
 
-/** AI 识别进度 / 结果弹窗。 */
+/** The dialog only dispatches user intent; recognition stays in its existing view model. */
 @Composable
 fun RecognitionDialog(vm: RecognitionViewModel, onDismiss: () -> Unit) {
     if (!vm.running && !vm.finished) return
+    RecognitionStatusDialog(vm.running, vm.mode, vm.done, vm.total, vm.succeeded, vm.failed, vm.currentName, vm.error,
+        onCancel = { vm.cancel() }, onClose = { vm.dismiss(); onDismiss() })
+}
 
+@Composable
+internal fun RecognitionStatusDialog(
+    running: Boolean, mode: RecognizeMode, done: Int, total: Int, succeeded: Int, failed: Int,
+    currentName: String, error: String?, onCancel: () -> Unit, onClose: () -> Unit
+) {
     AlertDialog(
-        onDismissRequest = {
-            if (!vm.running) {
-                vm.dismiss()
-                onDismiss()
-            }
-        },
-        containerColor = Surface2,
-        titleContentColor = TextPrimary,
-        textContentColor = TextSecondary,
-        title = {
-            Text(
-                if (vm.running) {
-                    when (vm.mode) {
-                        RecognizeMode.LEVELS -> "正在识别体力 / 负重"
-                        RecognizeMode.AW -> "正在识别 AW 子弹"
-                        RecognizeMode.BOTH -> "正在识别体力 / 负重 / AW"
-                    }
-                } else "识别结束",
-                style = MaterialTheme.typography.titleMedium
-            )
-        },
+        onDismissRequest = { if (!running) onClose() },
+        containerColor = Surface1,
+        icon = { Icon(Icons.Outlined.AutoAwesome, null, tint = Amber) },
+        title = { Text(if (running) "识别任务进行中" else "识别任务已结束", style = MaterialTheme.typography.titleLarge, color = TextPrimary) },
         text = {
-            Column {
-                if (vm.running) {
-                    Text(
-                        "进度 ${vm.done} / ${vm.total}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextPrimary
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { if (vm.total > 0) vm.done.toFloat() / vm.total else 0f },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Amber,
-                        trackColor = Surface3
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "当前：${vm.currentName.ifBlank { "准备中" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "成功 ${vm.succeeded} · 失败 ${vm.failed}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted
-                    )
-                } else if (vm.total == 0 && vm.error == null) {
-                    Text(
-                        "没有需要识别的账号（可能都已登记，或没有特勤处 / 仓库截图）。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-                } else {
-                    Text(
-                        "共 ${vm.total} 个账号，成功 ${vm.succeeded}，失败 ${vm.failed}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextPrimary
-                    )
-                }
-
-                if (!vm.running && vm.failed > 0) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "图片接口限流 120 次/分钟，失败多为限流或网络抖动；稍后重新识别即可（默认只识别未登记）。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted
-                    )
-                }
-
-                vm.error?.let { message ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Rose
-                    )
-                }
-            }
+            RecognitionProgressContent(running, mode, done, total, succeeded, failed, currentName, error,
+                Modifier.verticalScroll(rememberScrollState()))
         },
         confirmButton = {
-            if (vm.running) {
-                TextButton(onClick = { vm.cancel() }) {
-                    Text("取消", color = Rose)
-                }
-            } else {
-                TextButton(onClick = {
-                    vm.dismiss()
-                    onDismiss()
-                }) {
-                    Text("完成", color = Amber)
-                }
-            }
+            if (running) OutlinedButton(onClick = onCancel) { Text("取消识别", color = Rose) }
+            else Button(onClick = onClose) { Text("完成") }
         }
     )
+}
+
+@Composable
+internal fun RecognitionProgressContent(
+    running: Boolean, mode: RecognizeMode, done: Int, total: Int, succeeded: Int, failed: Int,
+    currentName: String, error: String?, modifier: Modifier = Modifier
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(when (mode) {
+            RecognizeMode.LEVELS -> "体力 / 负重识别"
+            RecognizeMode.AW -> "AW 子弹识别"
+            RecognizeMode.BOTH -> "体力 / 负重 / AW 识别"
+        }, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+        if (running) {
+            if (total > 0) {
+                Text("已处理 $done / $total 个账号", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+                LinearProgressIndicator(progress = { (done.toFloat() / total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = Amber, trackColor = Surface3)
+            } else {
+                Text("正在准备账号与截图…", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                LinearProgressIndicator(Modifier.fillMaxWidth(), color = Amber, trackColor = Surface3)
+            }
+            Text("当前：${currentName.ifBlank { "准备中" }}", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+        } else {
+            Text("共 $total 个账号", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(succeeded.toString(), color = Amber, style = MaterialTheme.typography.headlineMedium)
+                Text("识别成功", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(failed.toString(), color = if (failed > 0) Rose else TextPrimary, style = MaterialTheme.typography.headlineMedium)
+                Text("识别失败", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        if (!running && total == 0 && error == null) {
+            OperationFeedback("没有需要识别的账号。请检查登记状态，以及特勤处或仓库截图是否可用。")
+        }
+        if (!running && failed > 0) {
+            OperationFeedback("部分账号未完成识别。请查看错误信息并核对网络、截图和识别配置；稍后可使用「只识别未登记的账号」重试。")
+        }
+        error?.let { OperationFeedback(it, error = true) }
+        if (running) Text("取消后会保留已经完成的识别结果。", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+    }
 }
